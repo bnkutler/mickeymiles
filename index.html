@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mickey Miles</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+  <!-- Set your deployed API origin when hosting the site (no trailing slash).
+       Example: <script>window.MICKEY_API_BASE="https://mickey-api.onrender.com";</script> -->
+</head>
+<body>
+  <div class="app-shell">
+    <header class="top-bar panel">
+      <div>
+        <p class="eyebrow">Hamster Wheel Tracker</p>
+        <h1>Mickey Miles</h1>
+      </div>
+      <div class="chip" id="mode-chip">Connecting…</div>
+    </header>
+
+    <nav class="tab-nav panel" aria-label="Primary">
+      <button class="tab-button is-active" data-tab="status" type="button">Status</button>
+      <button class="tab-button" data-tab="log" type="button">Daily Log</button>
+      <button class="tab-button" data-tab="journey" type="button">Journey</button>
+    </nav>
+
+    <main>
+      <section class="tab-panel is-active" id="tab-status" aria-labelledby="status">
+        <div class="status-grid">
+          <div class="panel hamster-panel">
+            <div class="pixel-stage">
+              <canvas id="status-scene-canvas" width="192" height="144" aria-label="Mickey status scene"></canvas>
+            </div>
+            <div class="status-strip" id="status-strip">Resting and Refueling</div>
+            <div class="status-meta">
+              <div class="stat-block">
+                <span class="label">Wheel</span>
+                <span class="value" id="wheel-state">Stopped</span>
+              </div>
+              <div class="stat-block">
+                <span class="label">Last Update</span>
+                <span class="value" id="last-update">Demo mode</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel meter-panel">
+            <h2>Speedometer</h2>
+            <div class="speedometer">
+              <div class="seven-seg" id="speed-value">0.0</div>
+              <div class="mph-label">MPH</div>
+            </div>
+            <div class="meter-track">
+              <div class="meter-fill" id="meter-fill" style="width: 0%"></div>
+            </div>
+            <p class="meter-note">Wheel is not moving, so Mickey is shown at rest.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="tab-panel" id="tab-log" aria-labelledby="log">
+        <div class="panel log-panel">
+          <div class="section-head">
+            <h2>Previous Days</h2>
+            <p>Daily totals, wheel time, and average moving speed.</p>
+          </div>
+          <div class="log-list-head log-row">
+            <span>Day</span>
+            <span>Miles</span>
+            <span>Wheel Time</span>
+            <span>Avg Speed</span>
+          </div>
+          <ul class="log-list" id="log-list"></ul>
+        </div>
+      </section>
+
+      <section class="tab-panel" id="tab-journey" aria-labelledby="journey">
+        <div class="journey-grid">
+          <div class="panel journey-panel">
+            <div class="section-head">
+              <h2>LA to NYC Run</h2>
+              <p id="journey-subtitle">Mickey is currently at the start of the trip.</p>
+            </div>
+
+            <div class="journey-summary">
+              <div class="stat-block">
+                <span class="label">Journey Days</span>
+                <span class="value" id="journey-days">0</span>
+              </div>
+              <div class="stat-block">
+                <span class="label">Total Miles</span>
+                <span class="value" id="journey-total">0.0</span>
+              </div>
+              <div class="stat-block">
+                <span class="label">Miles Left</span>
+                <span class="value" id="journey-left">0.0</span>
+              </div>
+            </div>
+
+            <div class="journey-progress-wrap">
+              <div class="journey-track" id="journey-track">
+                <div class="journey-progress" id="journey-progress"></div>
+                <div class="journey-mickey" id="journey-mickey" aria-hidden="true"></div>
+              </div>
+              <div class="journey-scale">
+                <span>LA</span>
+                <span>NYC</span>
+              </div>
+            </div>
+
+            <div class="journey-location">
+              <div class="pixel-scene large">
+                <canvas id="journey-scene-canvas" width="256" height="160" aria-label="Current journey landmark scene"></canvas>
+              </div>
+              <div class="location-card">
+                <h3 id="current-landmark">Santa Monica Pier</h3>
+                <p id="current-landmark-copy"></p>
+                <p class="landmark-milepost">Mile marker: <span id="current-mile-marker">0</span></p>
+              </div>
+            </div>
+          </div>
+
+          <aside class="panel landmarks-panel">
+            <div class="section-head">
+              <h2>Landmarks</h2>
+              <p>Click to preview each scene and distance from Mickey.</p>
+            </div>
+            <div class="landmark-preview">
+              <div class="pixel-scene small">
+                <canvas id="preview-scene-canvas" width="176" height="112" aria-label="Selected landmark preview"></canvas>
+              </div>
+              <div class="preview-meta">
+                <h3 id="preview-landmark-name">Santa Monica Pier</h3>
+                <p id="preview-landmark-copy"></p>
+                <p id="preview-distance" class="distance-pill">0 miles away</p>
+              </div>
+            </div>
+            <div class="landmark-list" id="landmark-list" role="list"></div>
+          </aside>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
