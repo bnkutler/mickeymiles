@@ -1,0 +1,1035 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <meta name="design_doc_mode" content="canvas">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&family=Fredoka:wght@500;600;700&family=Baloo+2:wght@600;700;800&display=swap" rel="stylesheet">
+  <style>
+    body { margin: 0; background: #eae4d4; }
+    a { color: #5f7f4f; }
+    a:hover { color: #7fa06a; }
+    ::-webkit-scrollbar { height: 10px; width: 10px; }
+  </style>
+  <script src="pixel.js"></script>
+  <script src="mickey.js"></script>
+  <script src="landmarks.js"></script>
+  <script src="scenes.js"></script>
+</helmet>
+
+<section style="padding:40px 40px 90px; display:flex; flex-direction:column; gap:28px; font-family:'VT323',monospace; min-width:1500px;">
+
+  <div>
+    <p style="margin:0 0 6px; font-size:15px; letter-spacing:0.5px; color:#8a8267;">Turn 3 &middot; low-detail scrollable trail map + Friends &amp; Fam (<a href="#3b">3b</a> setup / <a href="#3c">3c</a> home)</p>
+    <h1 style="font-family:'Press Start 2P',monospace; font-size:17px; color:#2b2b22; margin:0;">Trail Map &amp; Friends &amp; Fam</h1>
+  </div>
+
+  <div style="display:flex; gap:44px; flex-wrap:wrap; align-items:flex-start;">
+
+    <!-- ============================= 3a — TRAIL MAP ============================= -->
+    <div id="3a" style="display:flex; flex-direction:column; gap:14px; align-items:center;">
+      <div style="font-family:'Press Start 2P',monospace; font-weight:400; font-size:11px; background:#9ea96a; color:#111; padding:8px 14px; border-radius:2px; letter-spacing:0.4px;">3a &middot; Trail Map</div>
+      <div style="width:390px; height:844px; border-radius:6px; border:14px solid #1b2218; box-shadow:0 20px 45px rgba(0,0,0,0.4), inset 0 0 0 3px #060905; position:relative; overflow:hidden; background:#111;">
+        <div style="position:absolute; top:0; left:0; right:0; bottom:96px; overflow-y:auto; overflow-x:hidden;">
+          <canvas ref="{{ trailMapRef }}" width="460" height="2680" style="width:100%; height:auto; display:block; image-rendering:pixelated;"></canvas>
+        </div>
+
+        <!-- bottom dock -->
+        <div style="position:absolute; bottom:0; left:0; right:0; display:grid; grid-template-columns:repeat(4,1fr); gap:2px; background:#161c14; border-top:2px solid #647256; padding:10px; z-index:2;">
+          <div style="background:#1b2218; border:2px solid #4a5640; padding:14px 2px; text-align:center; font-family:'Press Start 2P',monospace; font-size:8px; color:#c0c5ae;">STATUS</div>
+          <div style="background:#1b2218; border:2px solid #4a5640; padding:14px 2px; text-align:center; font-family:'Press Start 2P',monospace; font-size:8px; color:#c0c5ae;">LOG</div>
+          <div style="background:linear-gradient(180deg,#364230,#252e22); border:2px solid #b8c78d; padding:14px 2px; text-align:center; font-family:'Press Start 2P',monospace; font-size:8px; color:#f4f7e5; text-shadow:0 0 6px rgba(184,199,141,0.4);">TRAIL</div>
+          <div style="background:#1b2218; border:2px solid #4a5640; padding:14px 2px; text-align:center; font-family:'Press Start 2P',monospace; font-size:8px; color:#c0c5ae;">FRIENDS</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================= 3b — FRIENDS: SETUP ============================= -->
+    <div id="3b" style="display:flex; flex-direction:column; gap:14px; align-items:center;">
+      <div style="font-family:'Press Start 2P',monospace; font-weight:400; font-size:11px; background:#c88774; color:#111; padding:8px 14px; border-radius:2px; letter-spacing:0.4px;">3b &middot; Friends — Set Up</div>
+      <div style="width:390px; height:844px; border-radius:6px; border:14px solid #1b2218; box-shadow:0 20px 45px rgba(0,0,0,0.4), inset 0 0 0 3px #060905; position:relative; overflow:hidden; background:#343d29;">
+        <div style="position:absolute; top:20px; left:14px; right:14px; bottom:20px; overflow-y:auto; display:flex; flex-direction:column; gap:14px; align-items:center;">
+          <div style="text-align:center;">
+            <div style="font-family:'Press Start 2P',monospace; font-size:12px; color:#f4f7e5; line-height:1.6;">JOIN THE TRAIL CREW</div>
+            <div style="font-family:'VT323',monospace; font-size:15px; color:#c0c5ae; margin-top:6px;">Pick a name and build your pixel self.</div>
+          </div>
+
+          <div style="border:3px solid #55624a; background:#1a2017; box-shadow:0 0 0 2px #10150d inset; padding:10px;">
+            <canvas ref="{{ avatarPreviewRef }}" width="176" height="216" style="width:176px; height:216px; image-rendering:pixelated; display:block;"></canvas>
+          </div>
+
+          <div style="width:100%;">
+            <label style="display:block; font-family:'VT323',monospace; font-size:14px; color:#c0c5ae; margin-bottom:4px;">Name</label>
+            <input type="text" defaultValue="Trailhead Deb" style="width:100%; box-sizing:border-box; background:#171d14; border:2px solid #5a684c; color:#f2f1e7; font-family:'VT323',monospace; font-size:18px; padding:8px 10px;">
+          </div>
+
+          <div style="width:100%; display:flex; flex-direction:column; gap:8px;">
+            <div style="display:flex; align-items:center; justify-content:space-between; border:2px solid #5a684c; background:#1b2218; padding:10px 12px;">
+              <button onClick="{{ prevHair }}" style="border:none; background:none; color:#d9be79; font-family:'Press Start 2P',monospace; font-size:14px; cursor:pointer; padding:4px 8px;">◀</button>
+              <span style="font-family:'Press Start 2P',monospace; font-size:10px; color:#f4f7e5;">HAIR / HAT</span>
+              <button onClick="{{ nextHair }}" style="border:none; background:none; color:#d9be79; font-family:'Press Start 2P',monospace; font-size:14px; cursor:pointer; padding:4px 8px;">▶</button>
+            </div>
+            <div style="display:flex; align-items:center; justify-content:space-between; border:2px solid #5a684c; background:#1b2218; padding:10px 12px;">
+              <button onClick="{{ prevSkin }}" style="border:none; background:none; color:#d9be79; font-family:'Press Start 2P',monospace; font-size:14px; cursor:pointer; padding:4px 8px;">◀</button>
+              <span style="font-family:'Press Start 2P',monospace; font-size:10px; color:#f4f7e5;">SKIN</span>
+              <button onClick="{{ nextSkin }}" style="border:none; background:none; color:#d9be79; font-family:'Press Start 2P',monospace; font-size:14px; cursor:pointer; padding:4px 8px;">▶</button>
+            </div>
+            <div style="display:flex; align-items:center; justify-content:space-between; border:2px solid #5a684c; background:#1b2218; padding:10px 12px;">
+              <button onClick="{{ prevOutfit }}" style="border:none; background:none; color:#d9be79; font-family:'Press Start 2P',monospace; font-size:14px; cursor:pointer; padding:4px 8px;">◀</button>
+              <span style="font-family:'Press Start 2P',monospace; font-size:10px; color:#f4f7e5;">OUTFIT</span>
+              <button onClick="{{ nextOutfit }}" style="border:none; background:none; color:#d9be79; font-family:'Press Start 2P',monospace; font-size:14px; cursor:pointer; padding:4px 8px;">▶</button>
+            </div>
+          </div>
+
+          <button style="margin-top:6px; width:100%; border:2px solid #d9be79; background:linear-gradient(180deg,#4a4430,#35311f); color:#f2e8c4; font-family:'Press Start 2P',monospace; font-size:11px; padding:14px 10px; box-shadow:0 3px 0 #11170f;">CHECK IN ✓</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================= 3c — FRIENDS: HOME ============================= -->
+    <div id="3c" style="display:flex; flex-direction:column; gap:14px; align-items:center;">
+      <div style="font-family:'Press Start 2P',monospace; font-weight:400; font-size:11px; background:#c88774; color:#111; padding:8px 14px; border-radius:2px; letter-spacing:0.4px;">3c &middot; Friends — Home</div>
+      <div style="width:390px; height:844px; border-radius:6px; border:14px solid #1b2218; box-shadow:0 20px 45px rgba(0,0,0,0.4), inset 0 0 0 3px #060905; position:relative; overflow:hidden; background:#343d29;">
+        <div style="position:absolute; top:20px; left:14px; right:14px; bottom:96px; overflow-y:auto; display:flex; flex-direction:column; gap:16px;">
+          <div style="display:flex; align-items:center; gap:12px; border:2px solid #4a5640; background:rgba(255,255,255,0.02); padding:10px;">
+            <canvas ref="{{ meAvatarRef }}" width="52" height="66" style="width:52px; height:66px; image-rendering:pixelated; flex:none;"></canvas>
+            <div>
+              <div style="font-family:'Press Start 2P',monospace; font-size:11px; color:#f4f7e5;">HEY, TRAILHEAD!</div>
+              <div style="font-family:'VT323',monospace; font-size:14px; color:#c0c5ae; margin-top:4px;">One powerup per day, resets at midnight.</div>
+            </div>
+          </div>
+
+          <div>
+            <div style="font-family:'Press Start 2P',monospace; font-size:10px; color:#d9be79; margin-bottom:8px;">PICK TODAY'S POWERUP</div>
+            <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:8px;">
+              <sc-for list="{{ powerupCatalog }}" as="p" hint-placeholder-count="3">
+                <button onClick="{{ p.pick }}" style="{{ p.style }}">
+                  <canvas ref="{{ p.setRef }}" width="32" height="32" style="width:32px; height:32px; image-rendering:pixelated;"></canvas>
+                  <span style="font-family:'Press Start 2P',monospace; font-size:7px; color:#e8e5d4; line-height:1.4; text-align:center;">{{ p.label }}</span>
+                  <span style="font-family:'VT323',monospace; font-size:18px; color:#d9be79; font-weight:700;">{{ p.multiplier }}x Miles</span>
+                  <span style="font-family:'VT323',monospace; font-size:13px; color:#8a927a;">{{ p.duration }} min</span>
+                </button>
+              </sc-for>
+            </div>
+            <button style="margin-top:10px; width:100%; border:2px solid #d9be79; background:linear-gradient(180deg,#4a4430,#35311f); color:#f2e8c4; font-family:'Press Start 2P',monospace; font-size:9px; padding:12px 8px; box-shadow:0 3px 0 #11170f;">🎒 Pack it in Mickey's Backpack</button>
+          </div>
+
+          <div>
+            <div style="font-family:'Press Start 2P',monospace; font-size:10px; color:#d9be79; margin-bottom:8px;">ON THE BLEACHERS</div>
+            <div style="display:flex; gap:12px; overflow-x:auto; padding:10px; border:2px solid #4a5640; background:linear-gradient(0deg, #2a2418 0 12px, rgba(255,255,255,0.015) 12px);">
+              <sc-for list="{{ bleacherFolks }}" as="f" hint-placeholder-count="5">
+                <div style="display:flex; flex-direction:column; align-items:center; gap:4px; flex:none;">
+                  <canvas ref="{{ f.setRef }}" width="52" height="66" style="width:44px; height:56px; image-rendering:pixelated;"></canvas>
+                  <span style="font-family:'VT323',monospace; font-size:13px; color:#c0c5ae; max-width:52px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ f.name }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+
+        <!-- bottom dock -->
+        <div style="position:absolute; bottom:0; left:0; right:0; display:grid; grid-template-columns:repeat(4,1fr); gap:2px; background:#161c14; border-top:2px solid #647256; padding:10px; z-index:2;">
+          <div style="background:#1b2218; border:2px solid #4a5640; padding:14px 2px; text-align:center; font-family:'Press Start 2P',monospace; font-size:8px; color:#c0c5ae;">STATUS</div>
+          <div style="background:#1b2218; border:2px solid #4a5640; padding:14px 2px; text-align:center; font-family:'Press Start 2P',monospace; font-size:8px; color:#c0c5ae;">LOG</div>
+          <div style="background:#1b2218; border:2px solid #4a5640; padding:14px 2px; text-align:center; font-family:'Press Start 2P',monospace; font-size:8px; color:#c0c5ae;">TRAIL</div>
+          <div style="background:linear-gradient(180deg,#364230,#252e22); border:2px solid #b8c78d; padding:14px 2px; text-align:center; font-family:'Press Start 2P',monospace; font-size:8px; color:#f4f7e5; text-shadow:0 0 6px rgba(184,199,141,0.4);">FRIENDS</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<section style="padding:40px 40px 90px; display:flex; flex-direction:column; gap:28px; font-family:'VT323',monospace; min-width:1500px;">
+
+  <div style="display:flex; align-items:center; gap:18px; flex-wrap:wrap;">
+    <div>
+      <p style="margin:0 0 6px; font-size:15px; letter-spacing:0.5px; color:#8a8267;">Turn 2 &middot; refining <a href="#1b">1b</a> Retro Arcade &mdash; bigger HUD, pixel icons, in-place run, Log &amp; Trail screens</p>
+      <h1 style="font-family:'Press Start 2P',monospace; font-size:17px; color:#2b2b22; margin:0;">Retro Arcade — Status, Log &amp; Trail</h1>
+    </div>
+    <div style="display:flex; gap:10px; margin-left:auto; align-items:center; background:#dcd5bf; border:2px solid #b6ac8c; border-radius:12px; padding:10px 14px;">
+      <span style="font-size:15px; color:#5c5636; margin-right:4px;">Demo state:</span>
+      <button style="{{ btnStyleRunning2 }}" onClick="{{ setRunning2 }}">🏃 Running</button>
+      <button style="{{ btnStyleRefuel2 }}" onClick="{{ setRefuel2 }}">🍽️ Refuel</button>
+      <button style="{{ btnStyleSleep2 }}" onClick="{{ setSleeping2 }}">😴 Sleeping</button>
+      <button style="{{ btnStyleLove2 }}" onClick="{{ toggleLove2 }}">💚 Love</button>
+    </div>
+  </div>
+
+  <div style="display:flex; gap:44px; flex-wrap:wrap; align-items:flex-start;">
+
+    <!-- ============================= 2a — STATUS (refined) ============================= -->
+    <div id="2a" style="display:flex; flex-direction:column; gap:14px; align-items:center;">
+      <div style="font-family:'Press Start 2P',monospace; font-weight:400; font-size:11px; background:#8cbc72; color:#111; padding:8px 14px; border-radius:2px; letter-spacing:0.4px;">2a &middot; Status</div>
+      <div style="width:390px; height:844px; border-radius:6px; border:14px solid #1b2218; box-shadow:0 20px 45px rgba(0,0,0,0.4), inset 0 0 0 3px #060905; position:relative; overflow:hidden; background:#111;">
+        <canvas ref="{{ canvasRefStatus2 }}" width="460" height="996" style="position:absolute; inset:0; width:100%; height:100%; image-rendering:pixelated; display:block;"></canvas>
+        <div style="position:absolute; inset:0; pointer-events:none; background:repeating-linear-gradient(rgba(0,0,0,0) 0px, rgba(0,0,0,0) 2px, rgba(0,0,0,0.08) 3px); mix-blend-mode:multiply;"></div>
+
+        <div style="position:absolute; top:14px; left:14px; display:flex; flex-direction:column; gap:6px;">
+          <div style="background:rgba(10,14,8,0.7); border:2px solid #647256; padding:6px 9px; font-family:'Press Start 2P',monospace; font-size:8px; color:#8cbc72; text-shadow:0 0 6px rgba(140,188,114,0.5); white-space:nowrap;">● LIVE</div>
+          <div style="background:rgba(10,14,8,0.72); border:2px solid #647256; padding:6px 9px; display:flex; align-items:center; gap:6px; white-space:nowrap;">
+            <canvas ref="{{ pinIconRef1 }}" width="16" height="16" style="width:16px; height:16px; image-rendering:pixelated;"></canvas>
+            <span style="font-family:'Press Start 2P',monospace; font-size:7px; color:#e0d59c;">BIG BEAR LAKE</span>
+          </div>
+        </div>
+        <div style="position:absolute; top:14px; right:14px; background:rgba(10,14,8,0.72); border:2px solid #647256; padding:6px 9px; text-align:right;">
+          <div style="font-family:'Press Start 2P',monospace; font-size:14px; color:#e0d59c; text-shadow:2px 2px 0 rgba(0,0,0,0.5);">{{ speedLabel }}</div>
+          <div style="font-family:'Press Start 2P',monospace; font-size:7px; color:#c0c5ae; margin-top:2px;">MPH &middot; {{ milesLabel }} MI</div>
+        </div>
+
+        <!-- right edge action stack -->
+        <div style="position:absolute; right:14px; top:50%; transform:translateY(-50%); display:flex; flex-direction:column; gap:14px;">
+          <div style="width:64px; height:64px; border:2px solid #a86a74; background:linear-gradient(180deg,#2e3a29,#212a1e); box-shadow:0 4px 0 #11170f; display:grid; place-items:center;">
+            <canvas ref="{{ heartIconRef }}" width="24" height="24" style="width:26px; height:26px; image-rendering:pixelated;"></canvas>
+          </div>
+          <div style="width:64px; height:64px; border:2px solid #6e7b52; background:linear-gradient(180deg,#2e3a29,#212a1e); box-shadow:0 4px 0 #11170f; display:grid; place-items:center;">
+            <canvas ref="{{ boltIconRef }}" width="24" height="24" style="width:26px; height:26px; image-rendering:pixelated;"></canvas>
+          </div>
+          <div style="width:64px; height:64px; border:2px solid #6e7b52; background:linear-gradient(180deg,#2e3a29,#212a1e); box-shadow:0 4px 0 #11170f; display:grid; place-items:center;">
+            <canvas ref="{{ packIconRef }}" width="24" height="24" style="width:26px; height:26px; image-rendering:pixelated;"></canvas>
+          </div>
+        </div>
+
+        <!-- bottom dock -->
+        <div style="position:absolute; bottom:0; left:0; right:0; display:grid; grid-template-columns:repeat(4,1fr); gap:2px; background:#161c14; border-top:2px solid #647256; padding:10px;">
+          <div style="background:linear-gradient(180deg,#364230,#252e22); border:2px solid #b8c78d; padding:14px 2px; text-align:center; font-family:'Press Start 2P',monospace; font-size:8px; color:#f4f7e5; text-shadow:0 0 6px rgba(184,199,141,0.4);">STATUS</div>
+          <div style="background:#1b2218; border:2px solid #4a5640; padding:14px 2px; text-align:center; font-family:'Press Start 2P',monospace; font-size:8px; color:#c0c5ae;">LOG</div>
+          <div style="background:#1b2218; border:2px solid #4a5640; padding:14px 2px; text-align:center; font-family:'Press Start 2P',monospace; font-size:8px; color:#c0c5ae;">TRAIL</div>
+          <div style="background:#1b2218; border:2px solid #4a5640; padding:14px 2px; text-align:center; font-family:'Press Start 2P',monospace; font-size:8px; color:#c0c5ae;">FRIENDS</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================= 2b — DAILY LOG ============================= -->
+    <div id="2b" style="display:flex; flex-direction:column; gap:14px; align-items:center;">
+      <div style="font-family:'Press Start 2P',monospace; font-weight:400; font-size:11px; background:#d9be79; color:#111; padding:8px 14px; border-radius:2px; letter-spacing:0.4px;">2b &middot; Daily Log</div>
+      <div style="width:390px; height:844px; border-radius:6px; border:14px solid #1b2218; box-shadow:0 20px 45px rgba(0,0,0,0.4), inset 0 0 0 3px #060905; position:relative; overflow:hidden; background:#111;">
+        <canvas ref="{{ canvasRefLog }}" width="460" height="996" style="position:absolute; inset:0; width:100%; height:100%; image-rendering:pixelated; display:block;"></canvas>
+        <div style="position:absolute; inset:0; pointer-events:none; background:repeating-linear-gradient(rgba(0,0,0,0) 0px, rgba(0,0,0,0) 2px, rgba(0,0,0,0.08) 3px); mix-blend-mode:multiply;"></div>
+
+        <div style="position:absolute; top:14px; left:14px; right:14px; display:flex; gap:8px; z-index:2;">
+          <div style="flex:1; background:rgba(10,14,8,0.78); border:2px solid #647256; padding:8px 6px; text-align:center;">
+            <div style="font-family:'Press Start 2P',monospace; font-size:12px; color:#e0d59c; text-shadow:2px 2px 0 rgba(0,0,0,0.5);">{{ journeyTotals.total }}</div>
+            <div style="font-family:'Press Start 2P',monospace; font-size:7px; color:#c0c5ae; margin-top:4px;">TOTAL MI</div>
+          </div>
+          <div style="flex:1; background:rgba(10,14,8,0.78); border:2px solid #647256; padding:8px 6px; text-align:center;">
+            <div style="font-family:'Press Start 2P',monospace; font-size:12px; color:#8cbc72; text-shadow:2px 2px 0 rgba(0,0,0,0.5);">{{ journeyTotals.trueMiles }}</div>
+            <div style="font-family:'Press Start 2P',monospace; font-size:7px; color:#c0c5ae; margin-top:4px;">TRUE MI</div>
+          </div>
+          <div style="flex:1; background:rgba(10,14,8,0.78); border:2px solid #647256; padding:8px 6px; text-align:center;">
+            <div style="font-family:'Press Start 2P',monospace; font-size:12px; color:#d98787; text-shadow:2px 2px 0 rgba(0,0,0,0.5);">{{ journeyTotals.left }}</div>
+            <div style="font-family:'Press Start 2P',monospace; font-size:7px; color:#c0c5ae; margin-top:4px;">MI LEFT</div>
+          </div>
+        </div>
+
+        <div style="position:absolute; top:96px; left:14px; right:14px; bottom:96px; overflow-y:auto; display:flex; flex-direction:column; gap:8px;">
+          <div style="font-family:'Press Start 2P',monospace; font-size:11px; color:#f4f7e5; padding:6px 0 4px;">DAILY LOG</div>
+          <sc-for list="{{ logRows }}" as="row" hint-placeholder-count="5">
+            <div style="background:rgba(20,26,16,0.82); border:2px solid #47553f; padding:9px 10px; display:flex; flex-direction:column; gap:6px;">
+              <div style="display:flex; justify-content:space-between; align-items:center; gap:6px;">
+                <span style="font-family:'VT323',monospace; font-size:17px; color:#dcebcf; min-width:56px;">{{ row.date }}</span>
+                <span style="font-family:'Press Start 2P',monospace; font-size:9px; color:#e0d59c;">{{ row.miles }} MI</span>
+                <span style="font-family:'VT323',monospace; font-size:15px; color:#c0c5ae;">{{ row.time }}</span>
+                <span style="font-family:'VT323',monospace; font-size:15px; color:#c0c5ae;">{{ row.speed }} mph</span>
+              </div>
+              <sc-if value="{{ row.bonus }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex; gap:10px; font-family:'VT323',monospace; font-size:14px;">
+                  <span style="color:#8cbc72;">actual {{ row.actualLabel }} mi</span>
+                  <span style="color:#d9be79;">+{{ row.bonusLabel }} mi powerup</span>
+                </div>
+              </sc-if>
+            </div>
+            <sc-if value="{{ row.milestone }}" hint-placeholder-val="{{ false }}">
+              <div style="background:linear-gradient(90deg, rgba(217,190,121,0.35), rgba(140,188,114,0.2)); border:2px solid #d9be79; padding:6px 8px; font-family:'Press Start 2P',monospace; font-size:7px; color:#101408; text-shadow:0 1px 0 rgba(255,255,255,0.25);">🏔 {{ row.milestone }}</div>
+            </sc-if>
+          </sc-for>
+        </div>
+
+        <!-- bottom dock -->
+        <div style="position:absolute; bottom:0; left:0; right:0; display:grid; grid-template-columns:repeat(4,1fr); gap:2px; background:#161c14; border-top:2px solid #647256; padding:10px;">
+          <div style="background:#1b2218; border:2px solid #4a5640; padding:14px 2px; text-align:center; font-family:'Press Start 2P',monospace; font-size:8px; color:#c0c5ae;">STATUS</div>
+          <div style="background:linear-gradient(180deg,#364230,#252e22); border:2px solid #b8c78d; padding:14px 2px; text-align:center; font-family:'Press Start 2P',monospace; font-size:8px; color:#f4f7e5; text-shadow:0 0 6px rgba(184,199,141,0.4);">LOG</div>
+          <div style="background:#1b2218; border:2px solid #4a5640; padding:14px 2px; text-align:center; font-family:'Press Start 2P',monospace; font-size:8px; color:#c0c5ae;">TRAIL</div>
+          <div style="background:#1b2218; border:2px solid #4a5640; padding:14px 2px; text-align:center; font-family:'Press Start 2P',monospace; font-size:8px; color:#c0c5ae;">FRIENDS</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================= 2c — TRAIL ============================= -->
+    <div id="2c" style="display:flex; flex-direction:column; gap:14px; align-items:center;">
+      <div style="font-family:'Press Start 2P',monospace; font-weight:400; font-size:11px; background:#9ea96a; color:#111; padding:8px 14px; border-radius:2px; letter-spacing:0.4px;">2c &middot; Trail</div>
+      <div style="width:390px; height:844px; border-radius:6px; border:14px solid #1b2218; box-shadow:0 20px 45px rgba(0,0,0,0.4), inset 0 0 0 3px #060905; position:relative; overflow:hidden; background:#111;">
+        <canvas ref="{{ canvasRefTrail }}" width="460" height="996" style="position:absolute; inset:0; width:100%; height:100%; image-rendering:pixelated; display:block;"></canvas>
+        <div style="position:absolute; inset:0; pointer-events:none; background:repeating-linear-gradient(rgba(0,0,0,0) 0px, rgba(0,0,0,0) 2px, rgba(0,0,0,0.08) 3px); mix-blend-mode:multiply;"></div>
+
+        <div style="position:absolute; top:14px; left:14px; display:flex; flex-direction:column; gap:6px;">
+          <div style="background:rgba(10,14,8,0.7); border:2px solid #647256; padding:6px 9px; font-family:'Press Start 2P',monospace; font-size:8px; color:#8cbc72; text-shadow:0 0 6px rgba(140,188,114,0.5); white-space:nowrap;">● LIVE</div>
+          <div style="background:rgba(10,14,8,0.72); border:2px solid #647256; padding:6px 9px; display:flex; align-items:center; gap:6px; white-space:nowrap;">
+            <canvas ref="{{ pinIconRef3 }}" width="16" height="16" style="width:16px; height:16px; image-rendering:pixelated;"></canvas>
+            <span style="font-family:'Press Start 2P',monospace; font-size:7px; color:#e0d59c;">BIG BEAR LAKE</span>
+          </div>
+        </div>
+        <div style="position:absolute; top:14px; right:14px; background:rgba(10,14,8,0.72); border:2px solid #647256; padding:6px 9px; text-align:right;">
+          <div style="font-family:'Press Start 2P',monospace; font-size:11px; color:#e0d59c; text-shadow:2px 2px 0 rgba(0,0,0,0.5);">{{ journeyTotals.left }}</div>
+          <div style="font-family:'Press Start 2P',monospace; font-size:7px; color:#c0c5ae; margin-top:2px;">MI TO CANADA</div>
+        </div>
+
+        <div style="position:absolute; top:76px; left:14px; right:14px; bottom:96px; overflow-y:auto; display:flex; flex-direction:column; gap:10px;">
+          <div style="border:2px solid #4d5943; background:rgba(20,26,16,0.85); padding:8px;">
+            <div style="font-family:'Press Start 2P',monospace; font-size:9px; color:#f4f7e5;">BIG BEAR LAKE</div>
+            <div style="font-family:'VT323',monospace; font-size:14px; color:#d9be79; margin-top:4px;">San Bernardino Mountains &middot; mile 265</div>
+          </div>
+          <sc-for list="{{ trailNodes }}" as="node" hint-placeholder-count="6">
+            <div style="display:flex; align-items:center; gap:10px; padding:8px 4px;">
+              <span style="width:16px; height:16px; border:2px solid #55624a; background:{{ node.dotColor }}; flex:none;"></span>
+              <span style="font-family:'Press Start 2P',monospace; font-size:8px; color:{{ node.nameColor }}; flex:1;">{{ node.name }}</span>
+              <span style="font-family:'VT323',monospace; font-size:14px; color:#8a927a;">mi {{ node.mile }}</span>
+            </div>
+          </sc-for>
+        </div>
+
+        <!-- bottom dock -->
+        <div style="position:absolute; bottom:0; left:0; right:0; display:grid; grid-template-columns:repeat(4,1fr); gap:2px; background:#161c14; border-top:2px solid #647256; padding:10px;">
+          <div style="background:#1b2218; border:2px solid #4a5640; padding:14px 2px; text-align:center; font-family:'Press Start 2P',monospace; font-size:8px; color:#c0c5ae;">STATUS</div>
+          <div style="background:#1b2218; border:2px solid #4a5640; padding:14px 2px; text-align:center; font-family:'Press Start 2P',monospace; font-size:8px; color:#c0c5ae;">LOG</div>
+          <div style="background:linear-gradient(180deg,#364230,#252e22); border:2px solid #b8c78d; padding:14px 2px; text-align:center; font-family:'Press Start 2P',monospace; font-size:8px; color:#f4f7e5; text-shadow:0 0 6px rgba(184,199,141,0.4);">TRAIL</div>
+          <div style="background:#1b2218; border:2px solid #4a5640; padding:14px 2px; text-align:center; font-family:'Press Start 2P',monospace; font-size:8px; color:#c0c5ae;">FRIENDS</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<section style="padding:0 40px 90px; display:flex; flex-direction:column; gap:28px; font-family:'VT323',monospace; min-width:1500px;">
+
+  <div style="display:flex; align-items:center; gap:18px; flex-wrap:wrap;">
+    <div>
+      <p style="margin:0 0 6px; font-size:15px; letter-spacing:0.5px; color:#8a8267;">Turn 1 &middot; explore</p>
+      <h1 style="font-family:'Press Start 2P',monospace; font-size:17px; color:#2b2b22; margin:0;">Mickey Miles — Idle-Clicker Status Screen</h1>
+    </div>
+    <div style="display:flex; gap:10px; margin-left:auto; align-items:center; background:#dcd5bf; border:2px solid #b6ac8c; border-radius:12px; padding:10px 14px;">
+      <span style="font-size:15px; color:#5c5636; margin-right:4px;">Demo state:</span>
+      <button style="{{ btnStyleRunning }}" onClick="{{ setRunning }}">🏃 Running</button>
+      <button style="{{ btnStyleRefuel }}" onClick="{{ setRefuel }}">🍽️ Refuel</button>
+      <button style="{{ btnStyleSleep }}" onClick="{{ setSleeping }}">😴 Sleeping</button>
+      <button style="{{ btnStyleLove }}" onClick="{{ toggleLove }}">💚 Love</button>
+    </div>
+  </div>
+
+  <div style="display:flex; gap:44px; flex-wrap:wrap; align-items:flex-start;">
+
+    <!-- ============================= OPTION 1a — COZY ============================= -->
+    <div id="1a" style="display:flex; flex-direction:column; gap:14px; align-items:center;">
+      <div style="font-family:'Fredoka',sans-serif; font-weight:700; font-size:14px; background:#7fa06a; color:#fff; padding:6px 14px; border-radius:999px; letter-spacing:0.4px;">1a &middot; Cozy &amp; Cute</div>
+      <div style="width:390px; height:844px; border-radius:46px; border:12px solid #f3ead9; box-shadow:0 20px 45px rgba(60,50,20,0.28), 0 0 0 2px #d8cba8; position:relative; overflow:hidden; background:#111;">
+        <canvas ref="{{ canvasRefA }}" width="460" height="996" style="position:absolute; inset:0; width:100%; height:100%; image-rendering:pixelated; display:block;"></canvas>
+
+        <!-- top chips -->
+        <div style="position:absolute; top:18px; left:16px; background:rgba(252,247,235,0.88); backdrop-filter:blur(2px); border-radius:16px; padding:8px 14px; box-shadow:0 4px 10px rgba(0,0,0,0.18); font-family:'Fredoka',sans-serif; font-weight:600; font-size:14px; color:#4a4530; white-space:nowrap;">📍 Big Bear Lake</div>
+        <div style="position:absolute; top:18px; right:16px; display:flex; flex-direction:column; gap:6px; align-items:flex-end;">
+          <div style="background:rgba(252,247,235,0.88); border-radius:16px; padding:7px 14px; box-shadow:0 4px 10px rgba(0,0,0,0.18); font-family:'Fredoka',sans-serif; font-weight:700; font-size:14px; color:#3f6a2e;">{{ speedLabel }} MPH</div>
+          <div style="background:rgba(252,247,235,0.88); border-radius:16px; padding:7px 14px; box-shadow:0 4px 10px rgba(0,0,0,0.18); font-family:'Fredoka',sans-serif; font-weight:700; font-size:14px; color:#a67a2e;">{{ milesLabel }} mi today</div>
+        </div>
+
+        <!-- right edge action stack -->
+        <div style="position:absolute; right:16px; top:50%; transform:translateY(-50%); display:flex; flex-direction:column; gap:14px;">
+          <div style="width:56px; height:56px; border-radius:50%; background:rgba(252,247,235,0.92); box-shadow:0 6px 14px rgba(0,0,0,0.22); display:grid; place-items:center; font-size:22px;">💚</div>
+          <div style="width:56px; height:56px; border-radius:50%; background:rgba(252,247,235,0.92); box-shadow:0 6px 14px rgba(0,0,0,0.22); display:grid; place-items:center; font-size:22px;">⚡</div>
+          <div style="width:56px; height:56px; border-radius:50%; background:rgba(252,247,235,0.92); box-shadow:0 6px 14px rgba(0,0,0,0.22); display:grid; place-items:center; font-size:22px;">🎒</div>
+        </div>
+
+        <!-- bottom dock -->
+        <div style="position:absolute; bottom:20px; left:50%; transform:translateX(-50%); display:flex; gap:10px; background:rgba(252,247,235,0.9); border-radius:999px; padding:10px 12px; box-shadow:0 8px 20px rgba(0,0,0,0.22);">
+          <div style="width:46px; height:46px; border-radius:50%; background:#7fa06a; display:grid; place-items:center; font-size:20px; box-shadow:0 0 0 3px rgba(127,160,106,0.3);">🐹</div>
+          <div style="width:46px; height:46px; border-radius:50%; background:transparent; display:grid; place-items:center; font-size:20px;">📋</div>
+          <div style="width:46px; height:46px; border-radius:50%; background:transparent; display:grid; place-items:center; font-size:20px;">🗺️</div>
+          <div style="width:46px; height:46px; border-radius:50%; background:transparent; display:grid; place-items:center; font-size:20px;">👥</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================= OPTION 1b — RETRO ARCADE ============================= -->
+    <div id="1b" style="display:flex; flex-direction:column; gap:14px; align-items:center;">
+      <div style="font-family:'Press Start 2P',monospace; font-weight:400; font-size:11px; background:#8cbc72; color:#111; padding:8px 14px; border-radius:2px; letter-spacing:0.4px;">1b &middot; Retro Arcade HUD</div>
+      <div style="width:390px; height:844px; border-radius:6px; border:14px solid #1b2218; box-shadow:0 20px 45px rgba(0,0,0,0.4), inset 0 0 0 3px #060905; position:relative; overflow:hidden; background:#111;">
+        <canvas ref="{{ canvasRefB }}" width="460" height="996" style="position:absolute; inset:0; width:100%; height:100%; image-rendering:pixelated; display:block;"></canvas>
+        <div style="position:absolute; inset:0; pointer-events:none; background:repeating-linear-gradient(rgba(0,0,0,0) 0px, rgba(0,0,0,0) 2px, rgba(0,0,0,0.08) 3px); mix-blend-mode:multiply;"></div>
+
+        <!-- top chips -->
+        <div style="position:absolute; top:14px; left:14px; background:rgba(10,14,8,0.7); border:2px solid #647256; padding:6px 9px; font-family:'Press Start 2P',monospace; font-size:8px; color:#8cbc72; text-shadow:0 0 6px rgba(140,188,114,0.5);">● LIVE</div>
+        <div style="position:absolute; top:14px; right:14px; background:rgba(10,14,8,0.72); border:2px solid #647256; padding:6px 9px; text-align:right;">
+          <div style="font-family:'Press Start 2P',monospace; font-size:14px; color:#e0d59c; text-shadow:2px 2px 0 rgba(0,0,0,0.5);">{{ speedLabel }}</div>
+          <div style="font-family:'Press Start 2P',monospace; font-size:7px; color:#c0c5ae; margin-top:2px;">MPH &middot; {{ milesLabel }} MI</div>
+        </div>
+
+        <!-- right edge action stack -->
+        <div style="position:absolute; right:14px; top:50%; transform:translateY(-50%); display:flex; flex-direction:column; gap:10px;">
+          <div style="width:50px; height:50px; border:2px solid #a86a74; background:linear-gradient(180deg,#2e3a29,#212a1e); box-shadow:0 3px 0 #11170f; display:grid; place-items:center; font-size:20px;">💚</div>
+          <div style="width:50px; height:50px; border:2px solid #6e7b52; background:linear-gradient(180deg,#2e3a29,#212a1e); box-shadow:0 3px 0 #11170f; display:grid; place-items:center; font-size:20px;">⚡</div>
+          <div style="width:50px; height:50px; border:2px solid #6e7b52; background:linear-gradient(180deg,#2e3a29,#212a1e); box-shadow:0 3px 0 #11170f; display:grid; place-items:center; font-size:20px;">🎒</div>
+        </div>
+
+        <!-- bottom dock -->
+        <div style="position:absolute; bottom:0; left:0; right:0; display:grid; grid-template-columns:repeat(4,1fr); gap:2px; background:#161c14; border-top:2px solid #647256; padding:8px;">
+          <div style="background:linear-gradient(180deg,#364230,#252e22); border:2px solid #b8c78d; padding:9px 2px; text-align:center; font-family:'Press Start 2P',monospace; font-size:7px; color:#f4f7e5; text-shadow:0 0 6px rgba(184,199,141,0.4);">STATUS</div>
+          <div style="background:#1b2218; border:2px solid #4a5640; padding:9px 2px; text-align:center; font-family:'Press Start 2P',monospace; font-size:7px; color:#c0c5ae;">LOG</div>
+          <div style="background:#1b2218; border:2px solid #4a5640; padding:9px 2px; text-align:center; font-family:'Press Start 2P',monospace; font-size:7px; color:#c0c5ae;">TRAIL</div>
+          <div style="background:#1b2218; border:2px solid #4a5640; padding:9px 2px; text-align:center; font-family:'Press Start 2P',monospace; font-size:7px; color:#c0c5ae;">FRIENDS</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================= OPTION 1c — CANDY ============================= -->
+    <div id="1c" style="display:flex; flex-direction:column; gap:14px; align-items:center;">
+      <div style="font-family:'Baloo 2',sans-serif; font-weight:700; font-size:14px; background:linear-gradient(90deg,#ff9a5a,#ff6a88); color:#fff; padding:7px 16px; border-radius:999px; letter-spacing:0.3px;">1c &middot; Candy &amp; Cartoony</div>
+      <div style="width:390px; height:844px; border-radius:52px; border:12px solid; border-image:linear-gradient(160deg,#ffd166,#ff6a88,#5fb0ff) 1; box-shadow:0 22px 50px rgba(60,20,50,0.3); position:relative; overflow:hidden; background:#111;">
+        <canvas ref="{{ canvasRefC }}" width="460" height="996" style="position:absolute; inset:0; width:100%; height:100%; image-rendering:pixelated; display:block;"></canvas>
+
+        <!-- top chips -->
+        <div style="position:absolute; top:18px; left:16px; background:#5fb0ff; border:3px solid #fff; border-radius:18px; padding:7px 14px; box-shadow:0 6px 0 rgba(0,0,0,0.18); font-family:'Baloo 2',sans-serif; font-weight:700; font-size:14px; color:#fff;">📍 Big Bear Lake</div>
+        <div style="position:absolute; top:18px; right:16px; display:flex; flex-direction:column; gap:8px; align-items:flex-end;">
+          <div style="background:#ffd166; border:3px solid #fff; border-radius:18px; padding:6px 14px; box-shadow:0 6px 0 rgba(0,0,0,0.18); font-family:'Baloo 2',sans-serif; font-weight:800; font-size:14px; color:#7a4a00;">{{ speedLabel }} MPH</div>
+          <div style="background:#ff9a5a; border:3px solid #fff; border-radius:18px; padding:6px 14px; box-shadow:0 6px 0 rgba(0,0,0,0.18); font-family:'Baloo 2',sans-serif; font-weight:800; font-size:14px; color:#7a2f00;">{{ milesLabel }} mi</div>
+        </div>
+
+        <!-- right edge action stack -->
+        <div style="position:absolute; right:18px; top:50%; transform:translateY(-50%); display:flex; flex-direction:column; gap:16px;">
+          <div style="width:60px; height:60px; border-radius:50%; background:radial-gradient(circle at 35% 30%, #ff9bb0, #ff5f82); border:3px solid #fff; box-shadow:0 8px 0 rgba(0,0,0,0.2); display:grid; place-items:center; font-size:24px;">💚</div>
+          <div style="width:60px; height:60px; border-radius:50%; background:radial-gradient(circle at 35% 30%, #ffe28a, #ffb238); border:3px solid #fff; box-shadow:0 8px 0 rgba(0,0,0,0.2); display:grid; place-items:center; font-size:24px;">⚡</div>
+          <div style="width:60px; height:60px; border-radius:50%; background:radial-gradient(circle at 35% 30%, #c9a06a, #a06f3f); border:3px solid #fff; box-shadow:0 8px 0 rgba(0,0,0,0.2); display:grid; place-items:center; font-size:24px;">🎒</div>
+        </div>
+
+        <!-- bottom dock -->
+        <div style="position:absolute; bottom:22px; left:50%; transform:translateX(-50%); display:flex; gap:12px; background:rgba(255,255,255,0.94); border-radius:999px; padding:10px 14px; box-shadow:0 10px 24px rgba(0,0,0,0.25);">
+          <div style="width:50px; height:50px; border-radius:50%; background:linear-gradient(180deg,#8fd66a,#5fa63f); border:3px solid #fff; box-shadow:0 5px 0 rgba(0,0,0,0.18); display:grid; place-items:center; font-size:22px;">🐹</div>
+          <div style="width:50px; height:50px; border-radius:50%; background:#eee; display:grid; place-items:center; font-size:22px;">📋</div>
+          <div style="width:50px; height:50px; border-radius:50%; background:#eee; display:grid; place-items:center; font-size:22px;">🗺️</div>
+          <div style="width:50px; height:50px; border-radius:50%; background:#eee; display:grid; place-items:center; font-size:22px;">👥</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;iconScale&quot;: {&quot;editor&quot;: &quot;range&quot;, &quot;default&quot;: 1, &quot;min&quot;: 0.7, &quot;max&quot;: 1.4, &quot;step&quot;: 0.05, &quot;tsType&quot;: &quot;number&quot;}}">
+class Component extends DCLogic {
+  state = {
+    demoState: "running", loved: false, demoState2: "running", loved2: false,
+    builder: { hair: 0, skin: 2, outfit: 0 },
+    pendingPowerup: "blueberry"
+  };
+  canvases = {};
+  icons = {};
+  bg = {};
+  anim = { runX: -60, runFrame: 0, runFrameAt: 0, nibble: 0, nibbleAt: 0, lastT: 0 };
+  anim2 = { runFrame: 0, runFrameAt: 0, groundScroll: 0, nibble: 0, nibbleAt: 0, lastT: 0 };
+  iconsDrawn = false;
+  staticDrawn = false;
+
+  componentDidMount() {
+    this.raf = requestAnimationFrame(this.tick);
+  }
+
+  componentWillUnmount() {
+    if (this.raf) cancelAnimationFrame(this.raf);
+  }
+
+  tick = (t) => {
+    const dt = Math.min(80, t - (this.anim.lastT || t));
+    this.anim.lastT = t;
+    ["a", "b", "c"].forEach((key) => this.drawStage(key, t, dt));
+    this.drawStage2(t, dt);
+    this.drawIcons();
+    this.drawStaticScreens();
+    this.drawAvatarPreview();
+    this.raf = requestAnimationFrame(this.tick);
+  };
+
+  drawIcons() {
+    const iconScale = (this.props && this.props.iconScale) || 1;
+    if (this.lastIconScale !== iconScale) {
+      ["heart", "bolt", "pack"].forEach((k) => { if (this.icons[k]) this.icons[k].__drawn = false; });
+      this.lastIconScale = iconScale;
+    }
+    const drawIf = (key, fn) => {
+      const c = this.icons[key];
+      if (!c || c.__drawn) return;
+      const ctx = c.getContext("2d");
+      ctx.clearRect(0, 0, c.width, c.height);
+      fn(ctx);
+      c.__drawn = true;
+    };
+    drawIf("heart", (ctx) => this.drawPixelHeart(ctx, iconScale, "#e26a7a"));
+    drawIf("bolt", (ctx) => this.drawPixelBolt(ctx, iconScale, "#f2df9e"));
+    drawIf("pack", (ctx) => this.drawPixelPack(ctx, iconScale, "#c9713d", "#7d3f20", "#e0b26a"));
+    drawIf("pin1", (ctx) => this.drawPixelPin(ctx, 1, 0, 1.9, "#d9be79"));
+    drawIf("pin2", (ctx) => this.drawPixelPin(ctx, 1, 0, 1.9, "#d9be79"));
+    drawIf("pin3", (ctx) => this.drawPixelPin(ctx, 1, 0, 1.9, "#d9be79"));
+    drawIf("pin4", (ctx) => this.drawPixelPin(ctx, 1, 0, 1.9, "#d9be79"));
+  }
+
+  drawAvatarThumb(category, index, el) {
+    if (!el || el.__drawn) return;
+    const ctx = el.getContext("2d");
+    const preview = { hair: 0, skin: 2, outfit: 0 };
+    preview[category] = index;
+    drawAvatar(ctx, 1, 1, 3, preview);
+    el.__drawn = true;
+  }
+
+  drawBleacherSeat(avatar, el) {
+    if (!el || el.__drawn) return;
+    const ctx = el.getContext("2d");
+    drawAvatar(ctx, 2, 2, 4, avatar);
+    el.__drawn = true;
+  }
+
+  drawFoodIcon(type, el) {
+    if (!el || el.__drawn) return;
+    const ctx = el.getContext("2d");
+    drawFood(ctx, type, 2, 2, 3.5);
+    el.__drawn = true;
+  }
+
+  drawAvatarPreview() {
+    if (!this.avatarPreviewEl) return;
+    const ctx = this.avatarPreviewEl.getContext("2d");
+    ctx.clearRect(0, 0, this.avatarPreviewEl.width, this.avatarPreviewEl.height);
+    drawAvatar(ctx, 10, 6, 13, this.state.builder);
+  }
+
+  cycleBuilder(category, delta) {
+    this.setState((st) => ({ builder: { ...st.builder, [category]: (st.builder[category] + delta + 6) % 6 } }));
+  }
+
+  drawMeAvatar(el) {
+    if (!el || el.__drawn) return;
+    const ctx = el.getContext("2d");
+    drawAvatar(ctx, 2, 2, 4, { hair: 4, skin: 2, outfit: 0 });
+    el.__drawn = true;
+  }
+
+  drawTrailMap(el) {
+    if (!el || this.trailMapDrawn || typeof LANDMARKS === "undefined") return;
+    const ctx = el.getContext("2d");
+    const w = el.width;
+    const h = el.height;
+    const n = LANDMARKS.length;
+    const topMargin = 70;
+    const rowH = (h - topMargin - 70) / (n - 1);
+    const fakeS = { ctx, c: (c) => c };
+
+    ctx.fillStyle = "#3f6f8f";
+    ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = "#5e7a4a";
+    for (let y = 0; y < h; y++) {
+      const wobble = Math.sin(y / 40) * 10 + Math.sin(y / 17) * 5 + hashNoise(Math.floor(y / 6)) * 6;
+      const leftEdge = w * 0.22 + wobble;
+      ctx.fillRect(leftEdge, y, w - leftEdge, 1);
+      ctx.fillStyle = "rgba(255,255,255,0.22)";
+      ctx.fillRect(leftEdge, y, 2, 1);
+      ctx.fillStyle = "#5e7a4a";
+    }
+    // patchy speckled land texture (no horizontal banding)
+    for (let ty = 0; ty < h; ty += 9) {
+      for (let tx = w * 0.22; tx < w; tx += 12) {
+        const n = hashNoise(Math.floor(tx) * 13 + Math.floor(ty) * 31 + 5);
+        if (n > 0.62) px(ctx, tx + (n * 8 - 4), ty + hashNoise(tx + ty) * 6, 4, 3, "#527048");
+        else if (n < 0.12) px(ctx, tx + (n * 8), ty + hashNoise(tx * 2 + ty) * 6, 3, 2, "#6d8a58");
+      }
+    }
+
+    const curIdx = LANDMARKS.findIndex((l) => l.name === "Big Bear Lake");
+    const mountainKinds = ["mountains", "peak", "jagged", "volcano", "cones3", "ridge", "domes", "spires", "craterRim"];
+    const treeMotifs = ["pines", "firs", "oaks", "joshua"];
+
+    // node positions: organic (noise-driven) wander down the map, not a repeating wave
+    const nodes = [];
+    let bx = w * 0.42;
+    for (let i = 0; i < n; i++) {
+      const y = topMargin + (n - 1 - i) * rowH;
+      bx += (hashNoise(i * 31 + 7) - 0.5) * 46;
+      bx = Math.max(w * 0.3, Math.min(w * 0.6, bx));
+      nodes.push({ x: bx, y });
+    }
+
+    // country / state border lines
+    const yForMile = (mile) => {
+      let idx = 0;
+      for (let i = 0; i < n; i++) if (LANDMARKS[i].mile <= mile) idx = i;
+      return topMargin + (n - 1 - idx) * rowH;
+    };
+    const leftEdgeAt = (y) => w * 0.22 + Math.sin(y / 40) * 10 + Math.sin(y / 17) * 5 + hashNoise(Math.floor(y / 6)) * 6;
+    const borders = [yForMile(1700), yForMile(2150)];
+    borders.forEach((y) => {
+      ctx.save();
+      ctx.strokeStyle = "rgba(255,255,255,0.55)";
+      ctx.lineWidth = 2;
+      ctx.setLineDash([10, 7]);
+      ctx.beginPath();
+      ctx.moveTo(leftEdgeAt(y), y);
+      ctx.lineTo(w, y);
+      ctx.stroke();
+      ctx.restore();
+    });
+
+    // smooth trail path through the nodes
+    ctx.save();
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = "#e8d9b0";
+    ctx.lineWidth = 4;
+    ctx.setLineDash([9, 6]);
+    ctx.beginPath();
+    ctx.moveTo(nodes[0].x, nodes[0].y);
+    for (let i = 1; i < nodes.length - 1; i++) {
+      const midX = (nodes[i].x + nodes[i + 1].x) / 2;
+      const midY = (nodes[i].y + nodes[i + 1].y) / 2;
+      ctx.quadraticCurveTo(nodes[i].x, nodes[i].y, midX, midY);
+    }
+    ctx.lineTo(nodes[n - 1].x, nodes[n - 1].y);
+    ctx.stroke();
+    ctx.restore();
+
+    // scenery: mountains behind, trees in front, near each landmark
+    for (let i = 0; i < n; i++) {
+      const lm = LANDMARKS[i];
+      const { x, y } = nodes[i];
+      const isMountain = mountainKinds.includes(lm.far.kind);
+      const hasTrees = lm.motifs.some(([type]) => treeMotifs.includes(type));
+      const mColor = (lm.far.colors && lm.far.colors[0]) || "#6d7d62";
+      if (isMountain) {
+        farCone(fakeS, x - 30 - hashNoise(i * 5) * 14, y + 8, 13 + hashNoise(i * 9) * 6, 22 + hashNoise(i * 3) * 12, mColor, hashNoise(i * 11) > 0.6 ? "#e8ecec" : null, hashNoise(i * 13) > 0.5);
+      }
+      if (hasTrees) {
+        pine(fakeS, x - 16 - hashNoise(i * 7) * 8, y + 6, 16 + hashNoise(i * 4) * 6, "#3e5c38");
+        pine(fakeS, x - 24 - hashNoise(i * 17) * 6, y + 9, 12 + hashNoise(i * 6) * 5, "#345031");
+      }
+    }
+
+    // pins + labels, drawn above scenery
+    for (let i = 0; i < n; i++) {
+      const lm = LANDMARKS[i];
+      const { x, y } = nodes[i];
+      const isCur = i === curIdx;
+      this.drawPixelPin(ctx, x - 10, y - 22, 1.9, isCur ? "#e26a7a" : "#d9be79");
+      ctx.font = (lm.name.length > 22 ? "16px" : "20px") + " 'VT323', monospace";
+      ctx.fillStyle = isCur ? "#fff59a" : "#f2f1e7";
+      ctx.fillText(lm.name, x + 18, y + 5);
+      ctx.font = "16px 'VT323', monospace";
+      ctx.fillStyle = "rgba(231,226,207,0.75)";
+      ctx.fillText("mile " + lm.mile, x + 18, y + 22);
+    }
+
+    ctx.font = "13px 'Press Start 2P', monospace";
+    ctx.fillStyle = "#ffd166";
+    ctx.fillText("CANADA", 16, 38);
+    ctx.fillText("MEXICO", 16, h - 22);
+
+    this.trailMapDrawn = true;
+  }
+
+  drawPixelHeart(ctx, scale, color) {
+    const rows = [
+      ".HH.HH.",
+      "HHHHHHH",
+      "HHHHHHH",
+      "HHHHHHH",
+      "HhhhhhH",
+      ".HHHHH.",
+      "..HHH..",
+      "...H..."
+    ];
+    const w = rows[0].length * 3 * scale;
+    const h = rows.length * 3 * scale;
+    const x = (24 - w) / 2;
+    const y = (24 - h) / 2;
+    drawGrid(ctx, rows, { H: color, h: shade(color, 1.28), ".": null }, x, y, 3 * scale);
+  }
+
+  drawPixelBolt(ctx, scale, color) {
+    const rows = [
+      "......LLL",
+      ".....LLL.",
+      "....LLL..",
+      "...LLLLLL",
+      "..LLLLl..",
+      ".LLLLl...",
+      "LLLLl....",
+      "...LLl...",
+      "....LL...",
+      ".....L..."
+    ];
+    const w = rows[0].length * 2.2 * scale;
+    const h = rows.length * 2.2 * scale;
+    const x = (24 - w) / 2;
+    const y = (24 - h) / 2;
+    drawGrid(ctx, rows, { L: color, l: shade(color, 0.68), ".": null }, x, y, 2.2 * scale);
+  }
+
+  drawPixelPack(ctx, scale, color, accent, light) {
+    const rows = [
+      "..BB..B.",
+      ".BBBBBB.",
+      "BBBBBBBB",
+      "BSSSSSSB",
+      "BSllllSB",
+      "BSSSSSSB",
+      "BBBBBBBB",
+      "BBBBBBBB",
+      "BBBBBBBB",
+      ".BBBBBB."
+    ];
+    const w = rows[0].length * 2.2 * scale;
+    const h = rows.length * 2.2 * scale;
+    const x = (24 - w) / 2;
+    const y = (24 - h) / 2;
+    drawGrid(ctx, rows, { B: color, S: shade(color, 0.7), l: light, ".": null }, x, y, 2.2 * scale);
+  }
+
+  drawPixelPin(ctx, x, y, s, color) {
+    pxCircle(ctx, x + 3 * s, y + 3 * s, 3 * s, color);
+    px(ctx, x + 2 * s, y + 5 * s, 2 * s, 2 * s, color);
+    px(ctx, x + 2.5 * s, y + 6.5 * s, s, s, color);
+    pxCircle(ctx, x + 3 * s, y + 3 * s, 1.1 * s, "#161c14");
+  }
+
+  drawLowTent(ctx, x, y, w, h) {
+    const canvasC = "#b8874f";
+    const canvasD = "#94693a";
+    const inner = "#3a2c20";
+    const trim = "#5d4430";
+    for (let i = 0; i < h; i++) {
+      const t = i / h;
+      const span = Math.sqrt(Math.max(0, 1 - Math.pow(1 - t, 1.6))) * (w / 2);
+      px(ctx, x + w / 2 - span, y + h - i, span * 2, 1, i % 5 === 0 ? canvasD : canvasC);
+    }
+    const dh = h * 0.55;
+    for (let i = 0; i < dh; i++) {
+      const t = i / dh;
+      const span = Math.sin((t * Math.PI) / 2) * (w * 0.16);
+      px(ctx, x + w / 2 - span, y + h - i, span * 2, 1, inner);
+    }
+    px(ctx, x - 3, y + h - 2, w + 6, 3, trim);
+  }
+
+  drawScrollingGround(ctx, w, trailY, scroll, k) {
+    const tile = 26 * k;
+    const off = scroll % tile;
+    for (let x = -off; x < w + tile; x += tile) {
+      px(ctx, x, trailY + 2 * k, 3 * k, 1.5 * k, "rgba(232,217,176,0.55)");
+      px(ctx, x + 9 * k, trailY - 1 * k, 4 * k, 1.5 * k, "rgba(120,150,90,0.6)");
+      px(ctx, x + 17 * k, trailY + 4 * k, 2 * k, 1.5 * k, "rgba(232,217,176,0.4)");
+    }
+  }
+
+  drawStage2(t, dt) {
+    const canvas = this.canvases.t2;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    const w = canvas.width;
+    const h = canvas.height;
+    const bg = this.ensureBg("t2", w, h);
+    if (!bg) return;
+    ctx.drawImage(bg, 0, 0);
+
+    const trailY = Math.round(h * 0.86);
+    const scale = Math.max(4, Math.round((w / 256) * 4));
+    const k = w / 256;
+    const state = this.state.demoState2;
+    const loved = this.state.loved2;
+    const dt2 = Math.min(80, t - (this.anim2.lastT || t));
+    this.anim2.lastT = t;
+
+    if (state === "running") {
+      const mph = 3.2;
+      const scrollPxPerSec = (26 + Math.min(8, mph) * 16) * k;
+      this.anim2.groundScroll += (scrollPxPerSec * dt2) / 1000;
+      this.drawScrollingGround(ctx, w, trailY, this.anim2.groundScroll, k);
+      const frameMs = Math.max(80, 235 - mph * 22);
+      if (t - this.anim2.runFrameAt > frameMs) {
+        this.anim2.runFrame++;
+        this.anim2.runFrameAt = t;
+      }
+      const runX = w * 0.36;
+      const y = trailY - 17 * scale + Math.round(6 * k);
+      drawMickeyRun(ctx, runX, y, scale, this.anim2.runFrame);
+      for (let i = 0; i < 3; i++) {
+        const dOff = (this.anim2.groundScroll + i * 9 * k) % (30 * k);
+        px(ctx, runX - 4 * k - dOff, trailY + 3 * k - i * k, (3 - i) * k, 2 * k, "rgba(220,205,170,0.45)");
+      }
+      if (loved) this.drawHeartsSimple(ctx, runX + 40 * k, y - 30, t);
+    } else if (state === "refuel") {
+      const mx = Math.round(w * 0.4 - 10 * scale);
+      const my = trailY - 19 * scale + Math.round(8 * k);
+      if (t - this.anim2.nibbleAt > 420) {
+        this.anim2.nibble = 1 - this.anim2.nibble;
+        this.anim2.nibbleAt = t;
+      }
+      drawBackpackProp(ctx, Math.round(w * 0.68), trailY - 15 * scale + Math.round(4 * k), scale * 0.75, ["blueberry", "cheerio"]);
+      drawMickeySit(ctx, mx, my, scale, { item: "blueberry", nibble: this.anim2.nibble, smile: loved });
+      if (loved) this.drawHeartsSimple(ctx, mx + 22 * scale, my - 12, t);
+    } else {
+      const tw = Math.round(w * 0.5);
+      const th = Math.round(h * 0.19);
+      const tx = Math.round(w * 0.25);
+      const ty = trailY - th + Math.round(6 * k);
+      this.drawLowTent(ctx, tx, ty, tw, th);
+      const sc2 = Math.max(3, Math.round(scale * 0.7));
+      drawMickeySleep(ctx, tx + tw / 2 - 12 * sc2, ty + th - 8 * sc2, sc2);
+      if (loved) this.drawHeartsSimple(ctx, tx + tw / 2 + 44 * k, ty + 6, t);
+    }
+  }
+
+  drawStaticScreens() {
+    if (this.staticDrawn) return;
+    const lm = this.landmark();
+    if (!lm) return;
+    ["log", "trail"].forEach((key) => {
+      const canvas = this.canvases[key];
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d");
+      const w = canvas.width;
+      const h = canvas.height;
+      renderScene(canvas, lm, false);
+      ctx.fillStyle = "rgba(8,10,6,0.62)";
+      ctx.fillRect(0, 0, w, h);
+    });
+    if (this.canvases.log && this.canvases.trail) this.staticDrawn = true;
+  }
+
+  landmark() {
+    return (typeof LANDMARKS !== "undefined" && LANDMARKS.find((l) => l.name === "Big Bear Lake")) || (typeof LANDMARKS !== "undefined" ? LANDMARKS[7] : null);
+  }
+
+  ensureBg(key, w, h) {
+    const lm = this.landmark();
+    if (!lm) return null;
+    const cacheKey = `${w}x${h}`;
+    if (!this.bg[key] || this.bg[key].key !== cacheKey) {
+      const c = document.createElement("canvas");
+      c.width = w;
+      c.height = h;
+      renderScene(c, lm, false);
+      this.bg[key] = { canvas: c, key: cacheKey };
+    }
+    return this.bg[key].canvas;
+  }
+
+  drawHeartsSimple(ctx, x, y, t) {
+    for (let i = 0; i < 2; i++) {
+      const phase = (t / 900 + i * 0.5) % 1;
+      const hy = y - phase * 24;
+      ctx.globalAlpha = 1 - phase;
+      const hx = x + i * 14 + Math.sin(phase * 6) * 3;
+      px(ctx, hx, hy + 2, 3, 3, "#e26a7a");
+      px(ctx, hx + 4, hy + 2, 3, 3, "#e26a7a");
+      px(ctx, hx, hy + 4, 7, 3, "#e26a7a");
+      px(ctx, hx + 1, hy + 7, 5, 2, "#e26a7a");
+      px(ctx, hx + 2, hy + 9, 3, 2, "#e26a7a");
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  drawStage(key, t, dt) {
+    const canvas = this.canvases[key];
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    const w = canvas.width;
+    const h = canvas.height;
+    const bg = this.ensureBg(key, w, h);
+    if (!bg) return;
+    ctx.drawImage(bg, 0, 0);
+
+    const trailY = Math.round(h * 0.86);
+    const scale = Math.max(3, Math.round((w / 256) * 3));
+    const k = w / 256;
+    const state = this.state.demoState;
+    const loved = this.state.loved;
+
+    if (state === "running") {
+      const pxPerSec = 60 * k;
+      this.anim.runX += (pxPerSec * dt) / 1000;
+      if (this.anim.runX > w + 60) this.anim.runX = -110 * k;
+      if (t - this.anim.runFrameAt > 150) {
+        this.anim.runFrame++;
+        this.anim.runFrameAt = t;
+      }
+      const y = trailY - 17 * scale + Math.round(6 * k);
+      drawMickeyRun(ctx, this.anim.runX, y, scale, this.anim.runFrame);
+      for (let i = 0; i < 3; i++) {
+        const dx = this.anim.runX - 6 * k - i * 7 * k - (this.anim.runFrame % 2) * 3 * k;
+        px(ctx, dx, trailY + 4 * k - i * k, (3 - i) * k, 2 * k, "rgba(220,205,170,0.5)");
+      }
+      if (loved) this.drawHeartsSimple(ctx, this.anim.runX + 40 * k, y - 30, t);
+    } else if (state === "refuel") {
+      const mx = Math.round(w * 0.42 - 10 * scale);
+      const my = trailY - 19 * scale + Math.round(8 * k);
+      if (t - this.anim.nibbleAt > 420) {
+        this.anim.nibble = 1 - this.anim.nibble;
+        this.anim.nibbleAt = t;
+      }
+      drawBackpackProp(ctx, Math.round(w * 0.66), trailY - 15 * scale + Math.round(4 * k), scale * 0.7, ["blueberry", "cheerio"]);
+      drawMickeySit(ctx, mx, my, scale, { item: "blueberry", nibble: this.anim.nibble, smile: loved });
+      if (loved) this.drawHeartsSimple(ctx, mx + 22 * scale, my - 12, t);
+    } else {
+      const tw = Math.round(w * 0.42);
+      const th = Math.round(h * 0.3);
+      const tx = Math.round(w * 0.3);
+      const ty = trailY - th + Math.round(6 * k);
+      drawTent(ctx, tx, ty, tw, th);
+      const sc2 = Math.max(2, Math.round(scale * 0.62));
+      drawMickeySleep(ctx, tx + tw / 2 - 12 * sc2, ty + th - 10 * sc2 - 2, sc2);
+      if (loved) this.drawHeartsSimple(ctx, tx + tw / 2 + 44 * k, ty + 6, t);
+    }
+  }
+
+  renderVals() {
+    const s = this.state.demoState;
+    const s2 = this.state.demoState2;
+    const activeStyle = "font-family:'VT323',monospace; font-size:15px; padding:6px 12px; border-radius:8px; border:2px solid #7fa06a; background:#7fa06a; color:#fff; cursor:pointer;";
+    const idleStyle = "font-family:'VT323',monospace; font-size:15px; padding:6px 12px; border-radius:8px; border:2px solid #b6ac8c; background:#efe9d6; color:#5c5636; cursor:pointer;";
+    const loveOnStyle = "font-family:'VT323',monospace; font-size:15px; padding:6px 12px; border-radius:8px; border:2px solid #e26a7a; background:#e26a7a; color:#fff; cursor:pointer;";
+
+    const lm = this.landmark();
+    const idx = typeof LANDMARKS !== "undefined" ? LANDMARKS.findIndex((l) => l.name === "Big Bear Lake") : -1;
+    const nearby = idx >= 0 ? LANDMARKS.slice(Math.max(0, idx - 2), idx + 4) : [];
+    const trailNodes = nearby.map((l) => ({
+      name: l.name.toUpperCase(),
+      mile: l.mile,
+      dotColor: l.mile <= 265 ? "#8cbc72" : "#1a2117",
+      nameColor: l.name === "Big Bear Lake" ? "#d9be79" : l.mile <= 265 ? "#d6dcc2" : "#7d8871"
+    }));
+
+    // actual (wheel) miles vs powerup-boosted bonus miles per day.
+    // actual -> true miles total; actual+bonus -> total miles (also what counts toward miles left).
+    const rawLog = [
+      { date: "Jul 10", actual: 5.8, bonus: 0, time: "1h 12m", speed: "1.6", milestone: null },
+      { date: "Jul 9", actual: 6.4, bonus: 2.1, time: "1h 24m", speed: "1.7", milestone: null },
+      { date: "Jul 8", actual: 4.9, bonus: 0, time: "58 min", speed: "1.5", milestone: null },
+      { date: "Jul 7", actual: 7.1, bonus: 3.6, time: "1h 32m", speed: "1.8", milestone: "Reached Big Bear Lake — mile 265" },
+      { date: "Jul 6", actual: 5.2, bonus: 0, time: "1h 05m", speed: "1.4", milestone: null }
+    ];
+    const logRows = rawLog.map((r) => ({
+      date: r.date,
+      time: r.time,
+      speed: r.speed,
+      milestone: r.milestone,
+      bonus: r.bonus,
+      actualLabel: r.actual.toFixed(1),
+      bonusLabel: r.bonus.toFixed(1),
+      miles: (r.actual + r.bonus).toFixed(1)
+    }));
+
+    const trueMilesTotal = 254.8;
+    const bonusMilesTotal = 10.2;
+    const totalMilesJourney = trueMilesTotal + bonusMilesTotal;
+    const journeyTotals = {
+      trueMiles: trueMilesTotal.toFixed(1),
+      total: totalMilesJourney.toFixed(1),
+      left: (2650 - totalMilesJourney).toFixed(1)
+    };
+
+    return {
+      btnStyleRunning: s === "running" ? activeStyle : idleStyle,
+      btnStyleRefuel: s === "refuel" ? activeStyle : idleStyle,
+      btnStyleSleep: s === "sleeping" ? activeStyle : idleStyle,
+      btnStyleLove: this.state.loved ? loveOnStyle : idleStyle,
+      setRunning: () => this.setState({ demoState: "running" }),
+      setRefuel: () => this.setState({ demoState: "refuel" }),
+      setSleeping: () => this.setState({ demoState: "sleeping" }),
+      toggleLove: () => this.setState((st) => ({ loved: !st.loved })),
+      speedLabel: s === "running" ? "3.2" : "0.0",
+      milesLabel: "4.18",
+      canvasRefA: (el) => { if (el) this.canvases.a = el; },
+      canvasRefB: (el) => { if (el) this.canvases.b = el; },
+      canvasRefC: (el) => { if (el) this.canvases.c = el; },
+
+      btnStyleRunning2: s2 === "running" ? activeStyle : idleStyle,
+      btnStyleRefuel2: s2 === "refuel" ? activeStyle : idleStyle,
+      btnStyleSleep2: s2 === "sleeping" ? activeStyle : idleStyle,
+      btnStyleLove2: this.state.loved2 ? loveOnStyle : idleStyle,
+      setRunning2: () => this.setState({ demoState2: "running" }),
+      setRefuel2: () => this.setState({ demoState2: "refuel" }),
+      setSleeping2: () => this.setState({ demoState2: "sleeping" }),
+      toggleLove2: () => this.setState((st) => ({ loved2: !st.loved2 })),
+
+      canvasRefStatus2: (el) => { if (el) this.canvases.t2 = el; },
+      canvasRefLog: (el) => { if (el) this.canvases.log = el; },
+      canvasRefTrail: (el) => { if (el) this.canvases.trail = el; },
+
+      heartIconRef: (el) => { if (el) this.icons.heart = el; },
+      boltIconRef: (el) => { if (el) this.icons.bolt = el; },
+      packIconRef: (el) => { if (el) this.icons.pack = el; },
+      pinIconRef1: (el) => { if (el) this.icons.pin1 = el; },
+      pinIconRef2: (el) => { if (el) this.icons.pin2 = el; },
+      pinIconRef3: (el) => { if (el) this.icons.pin3 = el; },
+
+      logRows,
+      journeyTotals,
+      trailNodes,
+
+      pinIconRef4: (el) => { if (el) this.icons.pin4 = el; },
+      trailMapRef: (el) => {
+        if (!el) return;
+        this.trailMapEl = el;
+        if (!this.trailMapDrawn) document.fonts.ready.then(() => this.drawTrailMap(this.trailMapEl));
+      },
+      avatarPreviewRef: (el) => { if (el) this.avatarPreviewEl = el; },
+      meAvatarRef: (el) => this.drawMeAvatar(el),
+
+      prevHair: () => this.cycleBuilder("hair", -1),
+      nextHair: () => this.cycleBuilder("hair", 1),
+      prevSkin: () => this.cycleBuilder("skin", -1),
+      nextSkin: () => this.cycleBuilder("skin", 1),
+      prevOutfit: () => this.cycleBuilder("outfit", -1),
+      nextOutfit: () => this.cycleBuilder("outfit", 1),
+
+      powerupCatalog: [
+        { type: "pumpkin_seed", label: "PUMPKIN SEED", multiplier: 2, duration: 30 },
+        { type: "blueberry", label: "BLUEBERRY", multiplier: 5, duration: 10 },
+        { type: "chili", label: "CHILI PEPPER", multiplier: 10, duration: 2 }
+      ].map((p) => ({
+        ...p,
+        setRef: (el) => this.drawFoodIcon(p.type, el),
+        pick: () => this.setState({ pendingPowerup: p.type }),
+        style: this.state.pendingPowerup === p.type
+          ? "display:flex; flex-direction:column; align-items:center; gap:5px; padding:10px 4px; border:2px solid #d9be79; background:#262e1e; box-shadow:0 0 10px rgba(217,190,121,0.35); cursor:pointer;"
+          : "display:flex; flex-direction:column; align-items:center; gap:5px; padding:10px 4px; border:2px solid #5a684c; background:#1b2218; cursor:pointer;"
+      })),
+
+      bleacherFolks: [
+        { name: "Grandma Deb", avatar: { hair: 4, skin: 2, outfit: 0 } },
+        { name: "Sam K.", avatar: { hair: 0, skin: 4, outfit: 1 } },
+        { name: "Jules", avatar: { hair: 2, skin: 0, outfit: 3 } },
+        { name: "Marco", avatar: { hair: 3, skin: 3, outfit: 4 } },
+        { name: "Aunt Ri", avatar: { hair: 5, skin: 1, outfit: 5 } }
+      ].map((f) => ({ ...f, setRef: (el) => this.drawBleacherSeat(f.avatar, el) }))
+    };
+  }
+
+  swatchOpt(category, index) {
+    const picked = this.state.builder[category] === index;
+    return {
+      index,
+      pick: () => this.setState((st) => ({ builder: { ...st.builder, [category]: index } })),
+      setRef: (el) => this.drawAvatarThumb(category, index, el),
+      style: picked
+        ? "border:2px solid #d9be79; background:#232d1e; box-shadow:0 0 8px rgba(217,190,121,0.4); padding:2px; cursor:pointer;"
+        : "border:2px solid #46513e; background:#181f16; padding:2px; cursor:pointer;"
+    };
+  }
+}
+</script>
+</body>
+</html>

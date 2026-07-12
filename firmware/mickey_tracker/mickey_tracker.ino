@@ -21,14 +21,17 @@
 // ----- Pin & wheel physics (adjust to your build) -----
 #define HALL_PIN 4  // GPIO 4 — change to match your jumper wiring
 
-// If your sensor reads LOW when the magnet is present, keep true.
-#define SENSOR_ACTIVE_LOW true
+// Slotted IR module (LM393): D0 reads HIGH when a flag blocks the slot and LOW
+// when the slot is clear -> the sensor is active HIGH, so this is false.
+#define SENSOR_ACTIVE_LOW false
 
-// Ignore edges closer than this (ms) — reduces double-counts / chatter
+// Ignore edges closer than this (ms) — reduces double-counts / chatter.
+// Also caps top speed: 45 ms -> up to ~22 revs/sec, far beyond any hamster.
 #define DEBOUNCE_MS 45
 
-// If no revolution for this long, treat wheel as stopped (ms)
-#define STOPPED_AFTER_MS 4000
+// If no revolution for this long, treat wheel as stopped (ms).
+// Should be >= TELEMETRY_INTERVAL_MS so one slow revolution still reads "moving".
+#define STOPPED_AFTER_MS 6000
 
 // POST interval to backend (ms)
 #define TELEMETRY_INTERVAL_MS 5000
@@ -36,8 +39,15 @@
 // Wi-Fi reconnect: try at most this often (ms)
 #define WIFI_RETRY_MS 10000
 
-// miles = (diameter_cm * PI) / 160934  — example: 28 cm diameter
-#define WHEEL_CIRCUMFERENCE_MILES (28.0f * 3.14159265f / 160934.0f)
+// miles = (diameter_cm * PI) / 160934  — measured wheel: 20 cm diameter
+#define WHEEL_CIRCUMFERENCE_MILES (20.0f * 3.14159265f / 160934.0f)
+
+// Number of flags on the wheel that pass through the slot per full revolution.
+// Two flags opposite each other -> 2 sensor pulses per revolution.
+#define FLAGS_PER_REV 2
+
+// Distance covered per sensor pulse (one flag pass = a fraction of a rev).
+#define MILES_PER_PULSE (WHEEL_CIRCUMFERENCE_MILES / (float)FLAGS_PER_REV)
 
 // ----- State -----
 unsigned long revolutionsToday = 0;
@@ -46,15 +56,52 @@ float wheelMinutesToday = 0.0f;
 char currentDateStr[12] = "1970-01-01";
 char lastDateStr[12] = "";
 
-bool lastStableHall = false;
-unsigned long debounceStartMs = 0;
+// ----- Interrupt-driven revolution counting -----
+// The ISR counts magnet passes in hardware, so we NEVER miss one — even while
+// loop() is blocked doing a Wi-Fi POST. All ISR vars are volatile.
+volatile unsigned long isrRevCount = 0;          // total passes seen by the ISR
+volatile unsigned long isrLastRevMicros = 0;     // micros() of last accepted pass
+volatile unsigned long isrLastIntervalMicros = 0;// gap between the last two passes
+unsigned long processedRevCount = 0;             // how many we've folded into totals
 
 unsigned long lastRevMs = 0;
 unsigned long lastRevIntervalMs = 0;
 float smoothedMph = 0.0f;
 
+// ----- Speed smoothing -----
+// A single revolution interval swings a lot (the flags aren't perfectly
+// spaced and the hamster surges), so we keep the last SPEED_WINDOW accepted
+// intervals and speed from the MEDIAN of them, then blend gently into the
+// displayed value once per pulse. Impossible (>25 mph) intervals are
+// rejected before they enter the window.
+#define SPEED_WINDOW 6
+#define SPEED_MAX_MPH 25.0f
+unsigned long revIntervalBuf[SPEED_WINDOW];
+uint8_t revIntervalCount = 0;
+uint8_t revIntervalIdx = 0;
+
+// True if the wheel turned at all since the last telemetry POST. This makes the
+// 5 s snapshot report "moving" whenever motion happened during the window,
+// instead of only if it was moving at the exact instant of the POST.
+bool movedSinceLastTelemetry = false;
+
 unsigned long lastTelemetryMs = 0;
 unsigned long lastWifiAttempt = 0;
+
+/** Runs in hardware on each magnet pass. Keep it tiny + IRAM-resident. */
+void IRAM_ATTR onHallEdge() {
+  unsigned long nowUs = micros();
+  unsigned long last = isrLastRevMicros;
+  // Debounce in the ISR: ignore edges closer together than DEBOUNCE_MS.
+  if (last != 0 && (nowUs - last) < (unsigned long)DEBOUNCE_MS * 1000UL) {
+    return;
+  }
+  if (last != 0) {
+    isrLastIntervalMicros = nowUs - last;
+  }
+  isrLastRevMicros = nowUs;
+  isrRevCount++;
+}
 
 void syncClock() {
   configTime(0, 0, "pool.ntp.org", "time.nist.gov");
@@ -102,7 +149,12 @@ void connectWifi() {
   lastWifiAttempt = now;
 
   Serial.printf("[wifi] Connecting to %s ...\n", WIFI_SSID);
+  WiFi.persistent(false);
   WiFi.mode(WIFI_STA);
+  WiFi.setSleep(false);         // disable modem power-save — top cause of random drops
+  WiFi.setAutoReconnect(true);  // let the stack re-associate cleanly on its own
+  WiFi.disconnect();            // clear any half-open attempt (stops "cannot set config")
+  delay(100);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   int tries = 0;
   while (WiFi.status() != WL_CONNECTED && tries < 40) {
@@ -115,43 +167,75 @@ void connectWifi() {
     Serial.print("[wifi] OK IP ");
     Serial.println(WiFi.localIP());
   } else {
-    Serial.println("[wifi] Failed — will retry");
+    // status codes: 1=SSID not found, 4=wrong password/auth, 6=disconnected
+    Serial.printf("[wifi] Failed (status=%d) — will retry\n", WiFi.status());
   }
-}
-
-/** Raw: true when magnet present / "active" (depends on SENSOR_ACTIVE_LOW). */
-bool hallRawActive() {
-  int v = digitalRead(HALL_PIN);
-#if SENSOR_ACTIVE_LOW
-  return (v == LOW);
-#else
-  return (v == HIGH);
-#endif
 }
 
 /**
- * Debounced level; returns true once per rising edge (magnet pass).
+ * Fold any passes the ISR counted into the running totals. Called every loop —
+ * cheap, and immune to whatever else loop() is doing (Wi-Fi, delays, etc.).
  */
-bool pollHallEdge() {
-  bool raw = hallRawActive();
-  unsigned long now = millis();
+void processRevolutions() {
+  noInterrupts();
+  unsigned long revs = isrRevCount;
+  unsigned long intervalUs = isrLastIntervalMicros;
+  interrupts();
 
-  if (raw != lastStableHall) {
-    if (debounceStartMs == 0) {
-      debounceStartMs = now;
+  if (revs != processedRevCount) {
+    unsigned long added = revs - processedRevCount;
+    processedRevCount = revs;
+    revolutionsToday += added;
+    lastRevMs = millis();
+    movedSinceLastTelemetry = true;
+    if (intervalUs > 0) {
+      lastRevIntervalMs = intervalUs / 1000UL;
+      pushRevInterval(lastRevIntervalMs);
     }
-    if (now - debounceStartMs >= DEBOUNCE_MS) {
-      lastStableHall = raw;
-      debounceStartMs = 0;
-    }
-  } else {
-    debounceStartMs = 0;
+    Serial.printf("[wheel] +%lu rev (today %lu)\n", added, revolutionsToday);
+  }
+}
+
+/** Accept a new pulse interval into the window and update the speed. */
+void pushRevInterval(unsigned long intervalMs) {
+  if (intervalMs == 0) {
+    return;
+  }
+  float inst = (MILES_PER_PULSE * 3600.0f * 1000.0f) / (float)intervalMs;
+  if (inst > SPEED_MAX_MPH) {
+    return;  // sensor chatter / impossible speed — reject the sample
+  }
+  revIntervalBuf[revIntervalIdx] = intervalMs;
+  revIntervalIdx = (revIntervalIdx + 1) % SPEED_WINDOW;
+  if (revIntervalCount < SPEED_WINDOW) {
+    revIntervalCount++;
   }
 
-  static bool prevStable = false;
-  bool rising = lastStableHall && !prevStable;
-  prevStable = lastStableHall;
-  return rising;
+  float target = (MILES_PER_PULSE * 3600.0f * 1000.0f) / (float)medianIntervalMs();
+  // Gentle blend per pulse: the median already removed the jitter, this just
+  // keeps the display from stepping when the median shifts.
+  smoothedMph = smoothedMph * 0.6f + target * 0.4f;
+}
+
+/** Median of the buffered intervals (insertion sort — max 6 elements). */
+unsigned long medianIntervalMs() {
+  unsigned long sorted[SPEED_WINDOW];
+  for (uint8_t i = 0; i < revIntervalCount; i++) {
+    unsigned long v = revIntervalBuf[i];
+    int8_t j = i - 1;
+    while (j >= 0 && sorted[j] > v) {
+      sorted[j + 1] = sorted[j];
+      j--;
+    }
+    sorted[j + 1] = v;
+  }
+  if (revIntervalCount == 0) {
+    return 0;
+  }
+  if (revIntervalCount % 2 == 1) {
+    return sorted[revIntervalCount / 2];
+  }
+  return (sorted[revIntervalCount / 2 - 1] + sorted[revIntervalCount / 2]) / 2;
 }
 
 float computeSpeedMph() {
@@ -161,19 +245,14 @@ float computeSpeedMph() {
   }
   unsigned long since = now - lastRevMs;
   if (since > STOPPED_AFTER_MS) {
+    // Stopped: decay toward 0 and drop stale intervals so the next run
+    // doesn't start from old (possibly slow) samples.
+    revIntervalCount = 0;
+    revIntervalIdx = 0;
     smoothedMph *= 0.9f;
     if (smoothedMph < 0.05f) {
       smoothedMph = 0.0f;
     }
-    return smoothedMph;
-  }
-  if (lastRevIntervalMs > 0) {
-    float inst = (WHEEL_CIRCUMFERENCE_MILES * 3600.0f * 1000.0f) / (float)lastRevIntervalMs;
-    if (inst > 25.0f) {
-      inst = smoothedMph;
-    }
-    smoothedMph = smoothedMph * 0.45f + inst * 0.55f;
-    return smoothedMph;
   }
   return smoothedMph;
 }
@@ -186,21 +265,8 @@ bool computeIsMoving(float mph) {
   return (now - lastRevMs) < STOPPED_AFTER_MS && mph >= 0.07f;
 }
 
-void onRevolution() {
-  unsigned long now = millis();
-  if (lastRevMs > 0) {
-    unsigned long dt = now - lastRevMs;
-    if (dt >= DEBOUNCE_MS && dt < 120000UL) {
-      lastRevIntervalMs = dt;
-    }
-  }
-  lastRevMs = now;
-  revolutionsToday++;
-  Serial.printf("[wheel] revolution #%lu today\n", revolutionsToday);
-}
-
 String buildJsonPayload(float mph, bool moving) {
-  float milesToday = revolutionsToday * WHEEL_CIRCUMFERENCE_MILES;
+  float milesToday = revolutionsToday * MILES_PER_PULSE;
   float avg = 0.0f;
   if (wheelMinutesToday > 0.05f) {
     avg = milesToday / (wheelMinutesToday / 60.0f);
@@ -227,7 +293,9 @@ void postTelemetry() {
   }
 
   float mph = computeSpeedMph();
-  bool moving = computeIsMoving(mph);
+  // "Moving" if the wheel turned any time during this telemetry window, OR it's
+  // still within the stopped-timeout right now. This is what kills the flicker.
+  bool moving = movedSinceLastTelemetry || computeIsMoving(mph);
 
   HTTPClient http;
   String url = String(API_BASE_URL) + "/api/telemetry";
@@ -244,13 +312,19 @@ void postTelemetry() {
     Serial.println(http.getString());
   }
   http.end();
+
+  // Reset the window flag AFTER a successful attempt so the next window is fresh.
+  movedSinceLastTelemetry = false;
 }
 
 void setup() {
   Serial.begin(115200);
   delay(600);
 
-  pinMode(HALL_PIN, INPUT_PULLUP);
+  pinMode(HALL_PIN, INPUT);  // LM393 module drives D0 and has its own pull-up
+  // Count every flag pass in hardware. Active-high sensor -> trigger on RISING.
+  attachInterrupt(digitalPinToInterrupt(HALL_PIN), onHallEdge,
+                  SENSOR_ACTIVE_LOW ? FALLING : RISING);
 
   setenv("TZ", TZ_STRING, 1);
   tzset();
@@ -280,9 +354,7 @@ void loop() {
 
   maybeRollDaily();
 
-  if (pollHallEdge()) {
-    onRevolution();
-  }
+  processRevolutions();
 
   float mph = computeSpeedMph();
   bool moving = computeIsMoving(mph);

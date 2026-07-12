@@ -1,0 +1,38 @@
+# Render Blueprint — one web service serves the Mickey Miles API + website.
+# To deploy: push this repo to GitHub, then in the Render dashboard choose
+# New → Blueprint, pick this repo, and apply. Render reads this file.
+#
+# NOTE: the persistent disk below requires the paid "starter" plan ($7/mo) so
+# the journey/log/accounts survive restarts and redeploys. To try it for free
+# first, set `plan: free` and delete the `disk:` block (data will reset on each
+# redeploy). You must be signed in to your own Render account (with a payment
+# method) to select a paid plan.
+services:
+  - type: web
+    name: mickeymiles
+    runtime: node
+    branch: main
+    rootDir: server
+    plan: starter
+    buildCommand: npm install
+    startCommand: npm start
+    autoDeploy: true
+    healthCheckPath: /api/health
+    envVars:
+      # Shared secret the ESP32 uses to POST telemetry. Set the SAME value in
+      # firmware/mickey_tracker/secrets.h (API_SECRET). Enter it in the dashboard.
+      - key: TELEMETRY_SECRET
+        sync: false
+      # Trail-local timezone — must match the firmware TZ_STRING.
+      - key: TRAIL_TZ
+        value: America/Los_Angeles
+      # Hide the DEV bar and disable /api/dev/* in production.
+      - key: MICKEY_DEV
+        value: "0"
+      # Where SQLite lives — points at the persistent disk mount below.
+      - key: DATA_DIR
+        value: /var/data
+    disk:
+      name: mickey-data
+      mountPath: /var/data
+      sizeGB: 1

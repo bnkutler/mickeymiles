@@ -2,149 +2,182 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Mickey Miles</title>
+  <meta name="description" content="Follow Mickey the hamster as he runs the Pacific Crest Trail, one wheel spin at a time." />
+  <meta name="theme-color" content="#1b2218" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Mickey Miles" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="styles.css" />
-  <!-- Set your deployed API origin when hosting the site (no trailing slash).
-       Example: <script>window.MICKEY_API_BASE="https://mickey-api.onrender.com";</script> -->
 </head>
 <body>
-  <div class="app-shell">
-    <header class="top-bar panel">
-      <div>
-        <p class="eyebrow">Hamster Wheel Tracker</p>
-        <h1>Mickey Miles</h1>
+  <div class="phone-fit" id="phone-fit">
+  <div class="phone" id="phone">
+    <!-- ============================ STATUS ============================ -->
+    <section class="screen is-active" id="screen-status">
+      <canvas class="scene-canvas" id="status-scene-canvas" width="460" height="996" aria-label="Mickey live scene"></canvas>
+      <div class="scanlines"></div>
+
+      <div class="hud-topleft">
+        <div class="hud-chip chip-live" id="mode-chip">● …</div>
+        <div class="hud-chip chip-loc">
+          <canvas id="pin-icon" width="16" height="16"></canvas>
+          <span id="scene-location">LOADING</span>
+        </div>
+        <div class="hud-chip chip-boost" id="boost-banner" hidden>
+          <canvas id="boost-bolt" width="14" height="14"></canvas>
+          <span id="boost-text"></span>
+        </div>
       </div>
-      <div class="chip" id="mode-chip">Connecting…</div>
-    </header>
 
-    <nav class="tab-nav panel" aria-label="Primary">
-      <button class="tab-button is-active" data-tab="status" type="button">Status</button>
-      <button class="tab-button" data-tab="log" type="button">Daily Log</button>
-      <button class="tab-button" data-tab="journey" type="button">Journey</button>
+      <div class="hud-topright hud-chip">
+        <div class="hud-speed" id="speed-value">0.0</div>
+        <div class="hud-sub">MPH · <span id="today-miles">0.00</span> MI</div>
+      </div>
+
+      <div class="action-stack">
+        <button class="action-button love" id="love-button" type="button" disabled aria-label="Send love">
+          <canvas id="icon-heart" width="30" height="30"></canvas>
+        </button>
+        <button class="action-button" id="backpack-button" type="button" aria-label="Backpack">
+          <canvas id="icon-pack" width="30" height="30"></canvas>
+        </button>
+      </div>
+
+      <div class="backpack-sheet" id="backpack-drawer">
+        <p class="drawer-label">MICKEY'S BACKPACK</p>
+        <div class="backpack-grid" id="backpack-grid"></div>
+        <p class="drawer-note">Snacks from friends — Mickey eats the oldest one first while refueling.</p>
+      </div>
+    </section>
+
+    <!-- ============================= LOG ============================== -->
+    <section class="screen" id="screen-log">
+      <canvas class="scene-canvas" id="log-scene-canvas" width="460" height="996" aria-hidden="true"></canvas>
+      <div class="scanlines"></div>
+
+      <div class="log-stats">
+        <div class="log-stat stat-total"><span class="num" id="stat-total">0.0</span><span class="lbl">TOTAL MI</span></div>
+        <div class="log-stat stat-true"><span class="num" id="stat-true">0.0</span><span class="lbl">TRUE MI</span></div>
+        <div class="log-stat stat-left"><span class="num" id="stat-left">2650</span><span class="lbl">MI LEFT</span></div>
+      </div>
+
+      <div class="log-scroll">
+        <div class="log-title">DAILY LOG</div>
+        <ul class="log-list" id="log-list"></ul>
+      </div>
+    </section>
+
+    <!-- ============================ TRAIL ============================= -->
+    <section class="screen" id="screen-trail">
+      <div class="trail-scroll" id="trail-map-wrap">
+        <canvas id="trail-map-canvas" width="460" height="2680" aria-label="Pacific Crest Trail map, Mexico to Canada"></canvas>
+      </div>
+    </section>
+
+    <!-- =========================== FRIENDS ============================ -->
+    <section class="screen screen-lite" id="screen-friends">
+      <div class="friends-scroll">
+        <div class="setup-col" id="friends-setup" hidden>
+          <div class="setup-head">
+            <h2>JOIN THE TRAIL CREW</h2>
+            <p>Pick a name and build your pixel self.</p>
+          </div>
+          <div class="preview-box">
+            <canvas id="builder-preview" width="176" height="216"></canvas>
+          </div>
+          <div class="name-field">
+            <label for="builder-name">Name</label>
+            <input id="builder-name" type="text" maxlength="20" autocomplete="nickname" />
+          </div>
+          <div class="shufflers">
+            <div class="shuffler">
+              <button class="arrow" type="button" data-key="hair" data-dir="-1" aria-label="Previous hair">◀</button>
+              <span class="lbl">HAIR / HAT</span>
+              <button class="arrow" type="button" data-key="hair" data-dir="1" aria-label="Next hair">▶</button>
+            </div>
+            <div class="shuffler">
+              <button class="arrow" type="button" data-key="skin" data-dir="-1" aria-label="Previous skin">◀</button>
+              <span class="lbl">SKIN</span>
+              <button class="arrow" type="button" data-key="skin" data-dir="1" aria-label="Next skin">▶</button>
+            </div>
+            <div class="shuffler">
+              <button class="arrow" type="button" data-key="outfit" data-dir="-1" aria-label="Previous outfit">◀</button>
+              <span class="lbl">OUTFIT</span>
+              <button class="arrow" type="button" data-key="outfit" data-dir="1" aria-label="Next outfit">▶</button>
+            </div>
+          </div>
+          <button class="big-button" id="builder-save" type="button">CHECK IN ✓</button>
+        </div>
+
+        <div class="home-col" id="friends-home" hidden>
+          <div class="me-row">
+            <canvas id="friends-me-canvas" width="94" height="66"></canvas>
+            <div>
+              <h2 id="friends-hello">Hey!</h2>
+              <p>Thanks for checking in. One powerup per day, resets at midnight. See you on the trail! - BK and Mickey</p>
+            </div>
+          </div>
+
+          <div>
+            <div class="section-label">
+              <canvas id="picker-bolt" width="18" height="18"></canvas>
+              <span>PICK TODAY'S POWERUP</span>
+            </div>
+            <div class="powerup-cards" id="powerup-cards"></div>
+            <button class="big-button pack-button" id="pack-button" type="button" disabled>Pack it in Mickey's Backpack</button>
+            <p class="gift-done" id="gift-done" hidden>Packed! Mickey will eat it at his next refuel.</p>
+          </div>
+
+          <div>
+            <div class="section-label"><span>SPECTATING</span></div>
+            <div class="bleachers" id="bleachers-row"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================= DOCK ============================= -->
+    <nav class="dock" aria-label="Primary">
+      <button class="dock-button is-active" data-screen="status" type="button">STATUS</button>
+      <button class="dock-button" data-screen="log" type="button">LOG</button>
+      <button class="dock-button" data-screen="trail" type="button">TRAIL</button>
+      <button class="dock-button" data-screen="friends" type="button">FRIENDS</button>
     </nav>
-
-    <main>
-      <section class="tab-panel is-active" id="tab-status" aria-labelledby="status">
-        <div class="status-grid">
-          <div class="panel hamster-panel">
-            <div class="pixel-stage">
-              <canvas id="status-scene-canvas" width="192" height="144" aria-label="Mickey status scene"></canvas>
-            </div>
-            <div class="status-strip" id="status-strip">Resting and Refueling</div>
-            <div class="status-meta">
-              <div class="stat-block">
-                <span class="label">Wheel</span>
-                <span class="value" id="wheel-state">Stopped</span>
-              </div>
-              <div class="stat-block">
-                <span class="label">Last Update</span>
-                <span class="value" id="last-update">Demo mode</span>
-              </div>
-            </div>
-          </div>
-
-          <div class="panel meter-panel">
-            <h2>Speedometer</h2>
-            <div class="speedometer">
-              <div class="seven-seg" id="speed-value">0.0</div>
-              <div class="mph-label">MPH</div>
-            </div>
-            <div class="meter-track">
-              <div class="meter-fill" id="meter-fill" style="width: 0%"></div>
-            </div>
-            <p class="meter-note">Wheel is not moving, so Mickey is shown at rest.</p>
-          </div>
-        </div>
-      </section>
-
-      <section class="tab-panel" id="tab-log" aria-labelledby="log">
-        <div class="panel log-panel">
-          <div class="section-head">
-            <h2>Previous Days</h2>
-            <p>Daily totals, wheel time, and average moving speed.</p>
-          </div>
-          <div class="log-list-head log-row">
-            <span>Day</span>
-            <span>Miles</span>
-            <span>Wheel Time</span>
-            <span>Avg Speed</span>
-          </div>
-          <ul class="log-list" id="log-list"></ul>
-        </div>
-      </section>
-
-      <section class="tab-panel" id="tab-journey" aria-labelledby="journey">
-        <div class="journey-grid">
-          <div class="panel journey-panel">
-            <div class="section-head">
-              <h2>LA to NYC Run</h2>
-              <p id="journey-subtitle">Mickey is currently at the start of the trip.</p>
-            </div>
-
-            <div class="journey-summary">
-              <div class="stat-block">
-                <span class="label">Journey Days</span>
-                <span class="value" id="journey-days">0</span>
-              </div>
-              <div class="stat-block">
-                <span class="label">Total Miles</span>
-                <span class="value" id="journey-total">0.0</span>
-              </div>
-              <div class="stat-block">
-                <span class="label">Miles Left</span>
-                <span class="value" id="journey-left">0.0</span>
-              </div>
-            </div>
-
-            <div class="journey-progress-wrap">
-              <div class="journey-track" id="journey-track">
-                <div class="journey-progress" id="journey-progress"></div>
-                <div class="journey-mickey" id="journey-mickey" aria-hidden="true"></div>
-              </div>
-              <div class="journey-scale">
-                <span>LA</span>
-                <span>NYC</span>
-              </div>
-            </div>
-
-            <div class="journey-location">
-              <div class="pixel-scene large">
-                <canvas id="journey-scene-canvas" width="256" height="160" aria-label="Current journey landmark scene"></canvas>
-              </div>
-              <div class="location-card">
-                <h3 id="current-landmark">Santa Monica Pier</h3>
-                <p id="current-landmark-copy"></p>
-                <p class="landmark-milepost">Mile marker: <span id="current-mile-marker">0</span></p>
-              </div>
-            </div>
-          </div>
-
-          <aside class="panel landmarks-panel">
-            <div class="section-head">
-              <h2>Landmarks</h2>
-              <p>Click to preview each scene and distance from Mickey.</p>
-            </div>
-            <div class="landmark-preview">
-              <div class="pixel-scene small">
-                <canvas id="preview-scene-canvas" width="176" height="112" aria-label="Selected landmark preview"></canvas>
-              </div>
-              <div class="preview-meta">
-                <h3 id="preview-landmark-name">Santa Monica Pier</h3>
-                <p id="preview-landmark-copy"></p>
-                <p id="preview-distance" class="distance-pill">0 miles away</p>
-              </div>
-            </div>
-            <div class="landmark-list" id="landmark-list" role="list"></div>
-          </aside>
-        </div>
-      </section>
-    </main>
+  </div>
   </div>
 
-  <script src="app.js"></script>
+  <!-- DEV TOOLS — local testing only; hidden in production. Remove before launch. -->
+  <div class="dev-bar" id="dev-bar" hidden>
+    <span class="dev-tag">DEV</span>
+    <button type="button" data-dev="auto">Auto</button>
+    <button type="button" data-dev="running">Run</button>
+    <button type="button" data-dev="refuel">Refuel</button>
+    <button type="button" data-dev="sleeping">Sleep</button>
+    <button type="button" data-dev-seed>Seed Log</button>
+    <button type="button" data-dev-newme>New Me</button>
+    <button type="button" data-dev-reset>Clear</button>
+  </div>
+
+  <div class="toasts" id="toasts" aria-live="polite"></div>
+
+  <script>
+    // The backend serves this page, so talk to the same origin. Only set a
+    // full URL here (e.g. "https://your-api.onrender.com", no trailing slash)
+    // if you ever host the frontend separately from the API.
+    window.MICKEY_API_BASE = "";
+  </script>
+  <script src="js/pixel.js"></script>
+  <script src="js/landmarks.js"></script>
+  <script src="js/mickey.js"></script>
+  <script src="js/scenes.js"></script>
+  <script src="js/app.js"></script>
 </body>
 </html>

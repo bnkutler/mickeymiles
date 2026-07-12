@@ -1,7 +1,7 @@
 {
   "name": "mickey-miles-api",
-  "version": "1.0.0",
-  "description": "Simple API for Mickey Miles hamster wheel tracker",
+  "version": "2.0.0",
+  "description": "Mickey Miles — hamster PCT tracker backend (telemetry, users, powerups, backpack, presence)",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -11,6 +11,8 @@
     "node": ">=18"
   },
   "dependencies": {
-    "dotenv": "^16.4.5"
+    "better-sqlite3": "^11.10.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.2"
   }
 }
