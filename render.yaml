@@ -19,6 +19,10 @@ services:
     autoDeploy: true
     healthCheckPath: /api/health
     envVars:
+      # Pin Node to an LTS with prebuilt better-sqlite3 binaries (avoids a
+      # fragile native compile on Render's default/newer Node).
+      - key: NODE_VERSION
+        value: "22.11.0"
       # Shared secret the ESP32 uses to POST telemetry. Set the SAME value in
       # firmware/mickey_tracker/secrets.h (API_SECRET). Enter it in the dashboard.
       - key: TELEMETRY_SECRET
