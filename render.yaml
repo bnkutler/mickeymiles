@@ -23,9 +23,9 @@ services:
       # firmware/mickey_tracker/secrets.h (API_SECRET). Enter it in the dashboard.
       - key: TELEMETRY_SECRET
         sync: false
-      # Trail-local timezone — must match the firmware TZ_STRING.
+      # Trail-local timezone — must match the firmware TZ_STRING (Central here).
       - key: TRAIL_TZ
-        value: America/Los_Angeles
+        value: America/Chicago
       # Hide the DEV bar and disable /api/dev/* in production.
       - key: MICKEY_DEV
         value: "0"
