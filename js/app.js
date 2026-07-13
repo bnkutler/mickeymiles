@@ -357,6 +357,7 @@ function renderStatus() {
   renderBoostChip();
 
   const state = hamsterState();
+  document.getElementById("sleep-note").hidden = state !== "sleeping";
   const loveBtn = document.getElementById("love-button");
   loveBtn.disabled = !(profile && state !== "running" && connection === "live");
   loveBtn.title = !profile

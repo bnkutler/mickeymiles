@@ -139,6 +139,24 @@ body {
 }
 .chip-boost canvas { width: 14px; height: 14px; image-rendering: pixelated; }
 
+.sleep-note {
+  position: absolute;
+  top: 30%;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 4;
+  width: max-content;
+  max-width: 78%;
+  text-align: center;
+  background: rgba(10, 14, 8, 0.78);
+  border: 2px solid var(--stroke);
+  padding: 9px 12px;
+  font-family: "Press Start 2P", monospace;
+  font-size: 8px;
+  line-height: 1.7;
+  color: var(--readout);
+}
+
 .hud-topright {
   position: absolute;
   top: 14px;

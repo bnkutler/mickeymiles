@@ -28,8 +28,10 @@ const TRAIL_TZ = process.env.TRAIL_TZ || "America/Los_Angeles";
 
 const ROUTE_TOTAL_MILES = 2650;
 
-// Trail-local daytime window: Mickey "refuels" 7:00–19:59, sleeps otherwise.
-const DAY_START_HOUR = 7;
+// Real-world daylight window (trail-local). Mickey is nocturnal, so he SLEEPS
+// during daylight (08:00–19:59) and is awake/refueling at night (20:00–07:59).
+// `isDaytime` also drives the scene lighting so the sky matches the real clock.
+const DAY_START_HOUR = 8;
 const DAY_END_HOUR = 20;
 
 // Speed smoothing: average the raw firmware samples reported in this window.
@@ -157,7 +159,8 @@ const DEV_ENABLED = process.env.MICKEY_DEV !== "0";
 function resolveHamsterState(tracker, trail) {
   const override = DEV_ENABLED ? kvGet("devOverride") : null;
   if (override && override.state) return override.state;
-  return tracker.isMoving ? "running" : trail.isDaytime ? "refuel" : "sleeping";
+  // Nocturnal: asleep in daylight, up and refueling at night.
+  return tracker.isMoving ? "running" : trail.isDaytime ? "sleeping" : "refuel";
 }
 // =========================== END DEV TOOLS ==========================
 
