@@ -62,7 +62,7 @@ const MICKEY_RUN_LEGS = [
   ]
 ];
 
-// ---- front view (refueling), 20 x 19 ----
+// ---- front view (refueling), 20 wide, taller torso so he sits upright ----
 
 const MICKEY_SIT = [
   ".KKK............KKK.",
@@ -80,11 +80,16 @@ const MICKEY_SIT = [
   "kKKWWWWWWWWWWWWWWKKk",
   "kKKWWWWWWWWWWWWWWKKk",
   "kKKWWWWWWWWWWWWWWKKk",
+  "kKKWWWWWWWWWWWWWWKKk",
+  "kKKWWWWWWWWWWWWWWKKk",
+  "kKKWWWWWWWWWWWWWWKKk",
+  "kKKWWWWWWWWWWWWWWKKk",
   ".kKWWWWWWWWWWWWWWKk.",
   ".kKKWWWWWWWWWWWWKKk.",
   "..kPPWWWWWWWWWWPPk..",
   "...pp..........pp..."
 ];
+const MICKEY_SIT_H = MICKEY_SIT.length; // 23 rows tall
 
 // ---- sleeping (side, curled), 24 x 10 ----
 
@@ -285,9 +290,12 @@ function drawBackpackProp(ctx, x, baseY, scale) {
 
 /** Tiny pixel-person avatar for Friends & Fam. avatar = {hair, skin, outfit}. */
 const AVATAR_SKINS = ["#f5d3b3", "#eab890", "#d29b6e", "#a9714b", "#7f4f31", "#5b3a22"];
-const AVATAR_OUTFITS = ["#5f8f4f", "#4f6fa8", "#b05343", "#7d5a9e", "#c97f3f", "#3f8f88"];
-const AVATAR_HAIR_LABELS = ["Short", "Long", "Curly", "Cap", "Beanie", "Sun Hat"];
-const AVATAR_OUTFIT_LABELS = ["Forest Tee", "Blue Tee", "Red Flannel", "Purple Tee", "Orange Hoodie", "Teal Tee"];
+const AVATAR_HAIR_COLORS = ["#2a2320", "#6e4a2c", "#1d1a17", "#b04338", "#3f5f9e", "#d8b96e", "#7a4a26", "#8f4a6a"];
+const AVATAR_OUTFITS = ["#5f8f4f", "#4f6fa8", "#b05343", "#7d5a9e", "#c97f3f", "#3f8f88", "#e6ded0", "#c9556f", "#d8b840"];
+const AVATAR_HAIR_LABELS = ["Short", "Long", "Curly", "Cap", "Beanie", "Sun Hat", "Ponytail", "Mohawk"];
+const AVATAR_OUTFIT_LABELS = ["Forest Tee", "Blue Tee", "Red Flannel", "Purple Tee", "Orange Hoodie", "Teal Tee", "Mickey Tee", "Pink Tee", "Sunny Tee"];
+// Number of choices per attribute (used for shuffling + server validation).
+const AVATAR_COUNTS = { hair: AVATAR_HAIR_LABELS.length, skin: AVATAR_SKINS.length, outfit: AVATAR_OUTFITS.length };
 
 // ---- HUD pixel icons (hand-authored grids — never emoji) ----
 
@@ -359,11 +367,24 @@ function drawPixelPin(ctx, x, y, s, color) {
   pxCircle(ctx, x + 3 * s, y + 3 * s, 1.1 * s, "#161c14");
 }
 
+/** A tiny front-facing Mickey face for the "Mickey Tee" outfit. */
+function drawMickeyChest(ctx, cx, cy, s) {
+  const K = "#2b2623", W = "#f6f3ea", N = "#ef8f93";
+  px(ctx, cx, cy, s * 0.9, s * 0.9, K);                 // left ear
+  px(ctx, cx + s * 3.1, cy, s * 0.9, s * 0.9, K);       // right ear
+  px(ctx, cx, cy + s * 0.6, s * 4, s * 1.5, K);         // black cap
+  px(ctx, cx + s * 0.9, cy + s * 1.1, s * 0.5, s * 0.5, W); // eye glints
+  px(ctx, cx + s * 2.6, cy + s * 1.1, s * 0.5, s * 0.5, W);
+  px(ctx, cx + s * 0.8, cy + s * 1.7, s * 2.4, s * 1.5, W); // white muzzle
+  px(ctx, cx + s * 1.7, cy + s * 2.1, s * 0.7, s * 0.6, N); // pink nose
+}
+
 function drawAvatar(ctx, x, y, scale, avatar) {
   const skin = AVATAR_SKINS[avatar.skin % AVATAR_SKINS.length] || AVATAR_SKINS[0];
-  const outfit = AVATAR_OUTFITS[avatar.outfit % AVATAR_OUTFITS.length] || AVATAR_OUTFITS[0];
+  const oi = ((avatar.outfit % AVATAR_OUTFITS.length) + AVATAR_OUTFITS.length) % AVATAR_OUTFITS.length;
+  const outfit = AVATAR_OUTFITS[oi];
   const outfitD = shade(outfit, 0.72);
-  const hair = avatar.hair % 6;
+  const hair = ((avatar.hair % AVATAR_HAIR_COLORS.length) + AVATAR_HAIR_COLORS.length) % AVATAR_HAIR_COLORS.length;
 
   // head
   px(ctx, x + 3 * scale, y + 2 * scale, 6 * scale, 5 * scale, skin);
@@ -374,8 +395,7 @@ function drawAvatar(ctx, x, y, scale, avatar) {
   px(ctx, x + 5 * scale, y + 6 * scale, 2 * scale, scale * 0.6, shade(skin, 0.7));
 
   // hair / hat
-  const hairColors = ["#2a2320", "#6e4a2c", "#1d1a17", "#b04338", "#3f5f9e", "#d8b96e"];
-  const hc = hairColors[hair];
+  const hc = AVATAR_HAIR_COLORS[hair];
   if (hair === 0) { // short
     px(ctx, x + 3 * scale, y + scale, 6 * scale, 1.5 * scale, hc);
     px(ctx, x + 2.5 * scale, y + 2 * scale, scale, 2 * scale, hc);
@@ -394,10 +414,18 @@ function drawAvatar(ctx, x, y, scale, avatar) {
     px(ctx, x + 3 * scale, y + 0.2 * scale, 6 * scale, 2.2 * scale, hc);
     px(ctx, x + 3 * scale, y + 2 * scale, 6 * scale, 0.8 * scale, shade(hc, 0.7));
     px(ctx, x + 5.4 * scale, y - 0.8 * scale, 1.4 * scale, 1.2 * scale, shade(hc, 1.25));
-  } else { // sun hat
+  } else if (hair === 5) { // sun hat
     px(ctx, x + 1.4 * scale, y + 2 * scale, 9.2 * scale, scale, hc);
     px(ctx, x + 3.4 * scale, y + 0.4 * scale, 5.2 * scale, 1.8 * scale, hc);
     px(ctx, x + 3.4 * scale, y + 1.6 * scale, 5.2 * scale, 0.6 * scale, shade(hc, 0.75));
+  } else if (hair === 6) { // ponytail
+    px(ctx, x + 3 * scale, y + 0.8 * scale, 6 * scale, 1.6 * scale, hc);
+    px(ctx, x + 2.4 * scale, y + 1.6 * scale, scale, 2.4 * scale, hc);
+    px(ctx, x + 8.6 * scale, y + 1.4 * scale, 1.5 * scale, scale, hc);      // tie
+    px(ctx, x + 9.4 * scale, y + 2 * scale, 1.2 * scale, 4 * scale, hc);    // tail
+  } else { // mohawk
+    px(ctx, x + 5.2 * scale, y - 1 * scale, 1.6 * scale, 3.4 * scale, hc);  // crest
+    px(ctx, x + 3 * scale, y + 1.4 * scale, 6 * scale, scale, shade(hc, 0.85)); // shaved sides
   }
 
   // body
@@ -408,14 +436,15 @@ function drawAvatar(ctx, x, y, scale, avatar) {
   px(ctx, x + 9.4 * scale, y + 7.4 * scale, scale, 3.4 * scale, outfit);
   px(ctx, x + 1.6 * scale, y + 10.8 * scale, scale, scale, skin);
   px(ctx, x + 9.4 * scale, y + 10.8 * scale, scale, scale, skin);
-  // outfit variants: flannel check / hoodie pocket
-  if (avatar.outfit % 6 === 2) {
+  // outfit variants: flannel check / hoodie pocket / Mickey face
+  if (oi === 2) {
     px(ctx, x + 4 * scale, y + 7 * scale, scale * 0.8, 5 * scale, outfitD);
     px(ctx, x + 7 * scale, y + 7 * scale, scale * 0.8, 5 * scale, outfitD);
     px(ctx, x + 2.6 * scale, y + 9 * scale, 6.8 * scale, scale * 0.8, outfitD);
-  }
-  if (avatar.outfit % 6 === 4) {
+  } else if (oi === 4) {
     px(ctx, x + 4.4 * scale, y + 9.6 * scale, 3.2 * scale, 1.8 * scale, outfitD);
+  } else if (oi === 6) {
+    drawMickeyChest(ctx, x + 3.9 * scale, y + 7.7 * scale, scale * 0.95);
   }
   // legs
   px(ctx, x + 3.6 * scale, y + 12 * scale, 1.8 * scale, 2.6 * scale, "#3a3f4a");

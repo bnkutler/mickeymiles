@@ -40,7 +40,7 @@ const SPEED_WINDOW_MS = 6000;
 // If no telemetry for this long, the tracker is offline: speed 0, not moving.
 const TELEMETRY_STALE_MS = 120000;
 
-const PRESENCE_WINDOW_MS = 60000; // seen within this = on the bleachers
+const PRESENCE_WINDOW_MS = 45000; // seen within this = on the bleachers (fallback if the leave beacon is missed)
 const LOVE_COOLDOWN_MS = 6000;
 const LOVE_GLOW_MS = 5000; // how long Mickey smiles after a love press
 const CHEERIO_MS = 60000; // Mickey munches a default cheerio for a full minute
@@ -54,7 +54,23 @@ const POWERUPS = {
   chili: { label: "Chili Pepper", emoji: "🌶️", multiplier: 10, durationMs: 2 * 60 * 1000 }
 };
 
-const AVATAR_OPTIONS = { hair: 6, skin: 6, outfit: 6 };
+const AVATAR_OPTIONS = { hair: 8, skin: 6, outfit: 9 };
+
+// Keep names Mickey-friendly (parents + kids use this). Not exhaustive; tune
+// as needed. Matched against the name with non-letters stripped, lowercased.
+const BLOCKED_NAME_WORDS = [
+  "fuck", "shit", "bitch", "cunt", "pussy", "cock", "penis", "vagina", "boobs",
+  "asshole", "dumbass", "jackass", "bastard", "slut", "whore", "hoe", "damn",
+  "dickhead", "bollocks", "wanker", "twat", "nigger", "nigga", "faggot", "fag",
+  "retard", "spastic", "chink", "spic", "kike", "coon", "wetback", "tranny",
+  "rape", "nazi", "hitler", "porn", "sex", "cum", "jizz", "boner", "turd"
+];
+const nameOffenses = new Map(); // deviceId -> count (in-memory, resets on restart)
+
+function hasBlockedWord(name) {
+  const clean = String(name).toLowerCase().replace(/[^a-z]/g, "");
+  return BLOCKED_NAME_WORDS.some((w) => clean.includes(w));
+}
 
 // In-memory rolling window of raw speed samples from the firmware.
 // Losing this on restart only costs one smoothing window (~18s) — fine.
@@ -458,6 +474,15 @@ app.post("/api/users", (req, res) => {
   if (name.length < 1) {
     return res.status(400).json({ ok: false, error: "name required (1-20 chars)" });
   }
+  if (hasBlockedWord(name)) {
+    const key = deviceOf(body) || "anon";
+    const n = (nameOffenses.get(key) || 0) + 1;
+    nameOffenses.set(key, n);
+    const msg = n <= 1
+      ? "Please use a Mickey-friendly name."
+      : "BK and Mickey are disappointed, don't get banned!";
+    return res.status(400).json({ ok: false, error: msg, profanity: true });
+  }
   const avatar = body.avatar || {};
   const pick = (key) => {
     const v = Number(avatar[key]);
@@ -546,6 +571,13 @@ app.post("/api/backpack/gift", (req, res) => {
   addEvent("gift", user.name, redemption.type);
 
   res.json({ ok: true, packed: redemption.type });
+});
+
+// ---- leave (fired via sendBeacon on tab close) ----
+app.post("/api/leave", (req, res) => {
+  const user = getUser((req.body || {}).userId);
+  if (user) db.prepare("UPDATE users SET last_seen_at = 0 WHERE id = ?").run(user.id);
+  res.json({ ok: true });
 });
 
 // ---- love ----

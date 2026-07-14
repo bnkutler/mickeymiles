@@ -304,7 +304,7 @@ function drawStage(t, dt) {
     if (loved) drawHearts(ctx, runX + 24 * runScale, y - 8 * k, t);
   } else if (state === "refuel") {
     const mx = Math.round(w * 0.4 - 10 * scale);
-    const my = trailY - 19 * scale + Math.round(8 * k);
+    const my = trailY - 23 * scale + Math.round(8 * k);
     if (t - anim.nibbleAt > 420) { anim.nibble = 1 - anim.nibble; anim.nibbleAt = t; }
     const eating = S && S.hamster.eating;
     const item = eating ? eating.type : null; // null during the brief gap between snacks
@@ -697,7 +697,7 @@ function renderFriends() {
   mctx.clearRect(0, 0, meCv.width, meCv.height);
   drawAvatar(mctx, 2, 2, 4, BK_AVATAR);
   // integer scale keeps the sprite crisp (no gap-lines); no food in his hands
-  drawMickeySit(mctx, 50, 24, 2, { smile: true });
+  drawMickeySit(mctx, 50, 16, 2, { smile: true });
 
   renderPowerupCards();
   renderBleachers();
@@ -806,7 +806,8 @@ function initBuilder() {
   document.querySelectorAll(".shuffler .arrow").forEach((btn) => {
     btn.addEventListener("click", () => {
       const key = btn.dataset.key;
-      builder[key] = (builder[key] + Number(btn.dataset.dir) + 6) % 6;
+      const n = AVATAR_COUNTS[key];
+      builder[key] = (builder[key] + Number(btn.dataset.dir) + n) % n;
       drawBuilderPreview();
     });
   });
@@ -826,7 +827,7 @@ async function createProfile() {
   try {
     const r = await api("/api/users", {
       method: "POST",
-      body: JSON.stringify({ name, avatar: { hair: builder.hair, skin: builder.skin, outfit: builder.outfit } })
+      body: JSON.stringify({ name, deviceId, avatar: { hair: builder.hair, skin: builder.skin, outfit: builder.outfit } })
     });
     saveProfile(r.user);
     toast(`Welcome to the trail crew, ${r.user.name}!`);
@@ -952,12 +953,24 @@ function init() {
     document.fonts.ready.then(() => { trail.drawnKey = ""; ensureTrailMap(); });
   }
 
+  // Leave the spectating bench the moment the tab closes / is hidden.
+  window.addEventListener("pagehide", leaveBench);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") leaveBench();
+  });
+
   poll();
   setInterval(poll, POLL_INTERVAL_MS);
 
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("sw.js").catch(() => {});
   }
+}
+
+function leaveBench() {
+  if (!profile || !navigator.sendBeacon) return;
+  const body = new Blob([JSON.stringify({ userId: profile.id })], { type: "application/json" });
+  navigator.sendBeacon(`${API_BASE}/api/leave`, body);
 }
 
 init();
