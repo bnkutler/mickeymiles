@@ -381,6 +381,12 @@ function renderStatus() {
   renderBoostChip();
 
   const state = hamsterState();
+  const stateChip = document.getElementById("state-chip");
+  const stateLabels = { running: "RUNNING", refuel: "REFUELING", sleeping: "SLEEPING" };
+  stateChip.hidden = false;
+  stateChip.dataset.state = state;
+  stateChip.textContent = stateLabels[state] || "";
+
   document.getElementById("sleep-note").hidden = state !== "sleeping";
   const loveBtn = document.getElementById("love-button");
   loveBtn.disabled = !(profile && state !== "running" && connection === "live");

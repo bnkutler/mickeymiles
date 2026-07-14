@@ -114,6 +114,8 @@ body {
   z-index: 4;
 }
 
+.hud-row { display: flex; gap: 6px; align-items: stretch; }
+
 .hud-chip {
   background: rgba(10, 14, 8, 0.72);
   border: 2px solid var(--stroke);
@@ -127,6 +129,15 @@ body {
   color: var(--accent);
   text-shadow: 0 0 6px rgba(140, 188, 114, 0.5);
 }
+
+.chip-state {
+  font-family: "Press Start 2P", monospace;
+  font-size: 8px;
+  color: var(--readout);
+}
+.chip-state[data-state="running"] { color: #9be07a; border-color: rgba(140, 188, 114, 0.6); }
+.chip-state[data-state="refuel"] { color: var(--gold); border-color: rgba(217, 190, 121, 0.6); }
+.chip-state[data-state="sleeping"] { color: #b6c2e0; border-color: rgba(120, 140, 180, 0.6); }
 .chip-live.is-updating { color: var(--gold); text-shadow: none; }
 
 .chip-loc {
