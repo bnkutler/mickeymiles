@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS daily_log (
 CREATE TABLE IF NOT EXISTS redemptions (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id     TEXT NOT NULL,
+  device_id   TEXT,
   date        TEXT NOT NULL,
   type        TEXT NOT NULL,
   redeemed_at INTEGER NOT NULL,
@@ -68,6 +69,14 @@ CREATE TABLE IF NOT EXISTS kv (
   value TEXT NOT NULL
 );
 `);
+
+// Migration: add device_id to older redemptions tables + index for the
+// per-device daily powerup limit.
+const redemptionCols = db.prepare("PRAGMA table_info(redemptions)").all();
+if (!redemptionCols.some((c) => c.name === "device_id")) {
+  db.exec("ALTER TABLE redemptions ADD COLUMN device_id TEXT");
+}
+db.exec("CREATE INDEX IF NOT EXISTS idx_redemptions_device_date ON redemptions(device_id, date)");
 
 const kvGetStmt = db.prepare("SELECT value FROM kv WHERE key = ?");
 const kvSetStmt = db.prepare(

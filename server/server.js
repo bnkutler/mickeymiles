@@ -35,7 +35,8 @@ const DAY_START_HOUR = 8;
 const DAY_END_HOUR = 20;
 
 // Speed smoothing: average the raw firmware samples reported in this window.
-const SPEED_WINDOW_MS = 18000;
+// Short, so the readout tracks the real wheel speed instead of lagging behind.
+const SPEED_WINDOW_MS = 6000;
 // If no telemetry for this long, the tracker is offline: speed 0, not moving.
 const TELEMETRY_STALE_MS = 120000;
 
@@ -103,6 +104,18 @@ function getActiveBoost(now = Date.now()) {
 function getUser(id) {
   if (!id || typeof id !== "string") return null;
   return db.prepare("SELECT * FROM users WHERE id = ?").get(id) || null;
+}
+
+// Stable per-browser id used for the one-powerup-per-day limit. Profiles are
+// rebuilt every visit, but the device id persists, so the daily cap survives.
+function deviceOf(src) {
+  const v = src && src.deviceId;
+  return typeof v === "string" && v.length ? v.slice(0, 64) : "";
+}
+
+function redemptionForDevice(deviceId, date) {
+  if (!deviceId) return null;
+  return db.prepare("SELECT * FROM redemptions WHERE device_id = ? AND date = ?").get(deviceId, date) || null;
 }
 
 function touchPresence(userId, now = Date.now()) {
@@ -367,9 +380,8 @@ app.get("/api/state", (req, res) => {
 
   let you = null;
   if (user) {
-    const redemption = db
-      .prepare("SELECT * FROM redemptions WHERE user_id = ? AND date = ?")
-      .get(user.id, trail.date);
+    // Daily powerup status is tracked per-device (survives profile rebuilds).
+    const redemption = redemptionForDevice(deviceOf(req.query), trail.date);
     you = {
       id: user.id,
       name: user.name,
@@ -479,12 +491,13 @@ app.post("/api/powerups/redeem", (req, res) => {
   const type = body.type;
   if (!POWERUPS[type]) return res.status(400).json({ ok: false, error: "unknown powerup" });
 
+  const deviceId = deviceOf(body);
+  if (!deviceId) return res.status(400).json({ ok: false, error: "missing device id" });
+
   const now = Date.now();
   touchPresence(user.id, now);
   const trail = trailNow();
-  const existing = db
-    .prepare("SELECT * FROM redemptions WHERE user_id = ? AND date = ?")
-    .get(user.id, trail.date);
+  const existing = redemptionForDevice(deviceId, trail.date);
   if (existing) {
     return res.status(409).json({
       ok: false,
@@ -493,8 +506,9 @@ app.post("/api/powerups/redeem", (req, res) => {
       giftedToday: Boolean(existing.gifted)
     });
   }
-  db.prepare("INSERT INTO redemptions (user_id, date, type, redeemed_at) VALUES (?, ?, ?, ?)").run(
+  db.prepare("INSERT INTO redemptions (user_id, device_id, date, type, redeemed_at) VALUES (?, ?, ?, ?, ?)").run(
     user.id,
+    deviceId,
     trail.date,
     type,
     now
@@ -507,12 +521,11 @@ app.post("/api/backpack/gift", (req, res) => {
   const user = getUser(body.userId);
   if (!user) return res.status(401).json({ ok: false, error: "unknown user — make a profile first" });
 
+  const deviceId = deviceOf(body);
   const now = Date.now();
   touchPresence(user.id, now);
   const trail = trailNow();
-  const redemption = db
-    .prepare("SELECT * FROM redemptions WHERE user_id = ? AND date = ?")
-    .get(user.id, trail.date);
+  const redemption = redemptionForDevice(deviceId, trail.date);
   if (!redemption) return res.status(400).json({ ok: false, error: "redeem a powerup first" });
   if (redemption.gifted) return res.status(409).json({ ok: false, error: "already gifted today" });
 

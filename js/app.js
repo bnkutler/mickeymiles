@@ -7,7 +7,20 @@
 
 const API_BASE = (typeof window !== "undefined" && window.MICKEY_API_BASE) || "";
 const POLL_INTERVAL_MS = 4000;
-const PROFILE_KEY = "mickeymiles.profile.v1";
+const DEVICE_KEY = "mickeymiles.device.v1";
+
+// A stable per-browser id. It persists across visits (unlike the profile,
+// which is rebuilt every time) so the one-powerup-per-day limit still holds.
+function getDeviceId() {
+  let id = null;
+  try { id = localStorage.getItem(DEVICE_KEY); } catch {}
+  if (!id) {
+    id = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : `d-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    try { localStorage.setItem(DEVICE_KEY, id); } catch {}
+  }
+  return id;
+}
+const deviceId = getDeviceId();
 
 const FOOD_LABELS = {
   cheerio: "Cheerio",
@@ -20,21 +33,14 @@ const FOOD_LABELS = {
 
 let S = null;               // latest server state
 let connection = "loading"; // loading | live | offline
-let profile = loadProfile();
+let profile = null;         // rebuilt every visit — intentionally NOT persisted
 let lastEventId = null;
 let pendingPick = null;     // powerup type selected but not yet packed
 
-function loadProfile() {
-  try {
-    const p = JSON.parse(localStorage.getItem(PROFILE_KEY));
-    return p && p.id && p.name ? p : null;
-  } catch { return null; }
-}
-
+// Profile lives only for this session/tab, so the visitor makes a fresh one
+// each time the page opens. (The daily powerup cap uses deviceId, not this.)
 function saveProfile(p) {
   profile = p;
-  if (p) localStorage.setItem(PROFILE_KEY, JSON.stringify(p));
-  else localStorage.removeItem(PROFILE_KEY);
 }
 
 // ---------------------------------------------------------------- api
@@ -53,6 +59,7 @@ async function api(path, opts = {}) {
 async function poll() {
   try {
     const qs = new URLSearchParams();
+    qs.set("deviceId", deviceId);
     if (profile) qs.set("userId", profile.id);
     if (lastEventId !== null) qs.set("since", String(lastEventId));
     S = await api(`/api/state?${qs}`);
@@ -170,15 +177,19 @@ const anim = {
   nibbleAt: 0, nibble: 0, lastT: 0
 };
 
-// Inner scene area of the fixed 390x844 phone (minus the 14px bezel).
 const SCENE_W = 460;
-const SCENE_H = Math.round(SCENE_W * (844 - 28) / (390 - 28)); // ~1037, keeps aspect
 
+// Match the scene canvas resolution to however the screen is actually shaped
+// (phone-fill vs desktop frame) so the pixel art fills without stretching.
 function sizeCanvases() {
+  const c0 = document.getElementById("status-scene-canvas");
+  const rect = c0.getBoundingClientRect();
+  const aspect = rect.width > 0 ? rect.height / rect.width : (816 / 362);
+  const H = Math.max(700, Math.min(1400, Math.round(SCENE_W * aspect)));
   for (const id of ["status-scene-canvas", "log-scene-canvas"]) {
     const c = document.getElementById(id);
     c.width = SCENE_W;
-    c.height = SCENE_H;
+    c.height = H;
   }
   stage.bgKey = "";
   stage.logKey = "";
@@ -192,10 +203,23 @@ function sizeCanvases() {
 function fitPhone() {
   const fit = document.getElementById("phone-fit");
   const phone = document.getElementById("phone");
+  // On real phones (narrow screens) fill the whole screen — the CSS media
+  // query handles the sizing, so just clear the desktop scaling styles.
+  if (window.matchMedia("(max-width: 600px)").matches) {
+    fit.style.width = "";
+    fit.style.height = "";
+    phone.style.width = "";
+    phone.style.height = "";
+    phone.style.transform = "";
+    return;
+  }
+  // On larger screens, show the fixed 390x844 "device" scaled to fit, centered.
   const margin = 8;
   const vw = document.documentElement.clientWidth;
   const vh = document.documentElement.clientHeight;
   const k = Math.min((vw - margin) / 390, (vh - margin) / 844, 1);
+  phone.style.width = "390px";
+  phone.style.height = "844px";
   phone.style.transform = `scale(${k})`;
   fit.style.width = `${Math.round(390 * k)}px`;
   fit.style.height = `${Math.round(844 * k)}px`;
@@ -743,10 +767,10 @@ async function packPowerup() {
   try {
     if (!(you && you.redeemedToday)) {
       if (!pendingPick) return;
-      await api("/api/powerups/redeem", { method: "POST", body: JSON.stringify({ userId: profile.id, type: pendingPick }) });
+      await api("/api/powerups/redeem", { method: "POST", body: JSON.stringify({ userId: profile.id, deviceId, type: pendingPick }) });
       pendingPick = null;
     }
-    await api("/api/backpack/gift", { method: "POST", body: JSON.stringify({ userId: profile.id }) });
+    await api("/api/backpack/gift", { method: "POST", body: JSON.stringify({ userId: profile.id, deviceId }) });
     await poll();
   } catch (e) {
     toast(e.message, "toast-warn");
@@ -894,8 +918,8 @@ function initDevTools() {
 function init() {
   stage.canvas = document.getElementById("status-scene-canvas");
   stage.ctx = stage.canvas.getContext("2d");
-  sizeCanvases();
-  fitPhone();
+  fitPhone();       // size the phone box first...
+  sizeCanvases();   // ...then match the canvas resolution to it
   initIcons();
   initBuilder();
   initDevTools();
@@ -910,13 +934,15 @@ function init() {
   });
   document.getElementById("pack-button").addEventListener("click", packPowerup);
 
-  fitPhone();
   let resizeTimer = null;
-  window.addEventListener("resize", () => {
+  const onViewportChange = () => {
     fitPhone();
     clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(() => { sizeCanvases(); renderAll(); }, 250);
-  });
+    resizeTimer = setTimeout(() => { sizeCanvases(); renderAll(); }, 200);
+  };
+  window.addEventListener("resize", onViewportChange);
+  window.addEventListener("orientationchange", onViewportChange);
+  if (window.visualViewport) window.visualViewport.addEventListener("resize", onViewportChange);
 
   // boost countdown ticks between polls
   setInterval(renderBoostChip, 1000);

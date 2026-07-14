@@ -58,6 +58,20 @@ body {
   background: #111;
 }
 
+/* On real phones, fill the whole screen edge-to-edge (no letterbox frame). */
+@media (max-width: 600px) {
+  body { place-items: stretch; }
+  .phone-fit { width: 100vw; height: 100dvh; }
+  .phone {
+    width: 100vw;
+    height: 100dvh;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    transform: none;
+  }
+}
+
 /* ---------- screens ---------- */
 
 .screen {
@@ -150,10 +164,10 @@ body {
   text-align: center;
   background: rgba(10, 14, 8, 0.78);
   border: 2px solid var(--stroke);
-  padding: 9px 12px;
-  font-family: "Press Start 2P", monospace;
-  font-size: 8px;
-  line-height: 1.7;
+  padding: 8px 14px;
+  font-family: "VT323", monospace;
+  font-size: 17px;
+  line-height: 1.25;
   color: var(--readout);
 }
 

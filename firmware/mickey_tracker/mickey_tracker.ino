@@ -71,10 +71,12 @@ float smoothedMph = 0.0f;
 // ----- Speed smoothing -----
 // A single revolution interval swings a lot (the flags aren't perfectly
 // spaced and the hamster surges), so we keep the last SPEED_WINDOW accepted
-// intervals and speed from the MEDIAN of them, then blend gently into the
-// displayed value once per pulse. Impossible (>25 mph) intervals are
+// intervals and speed from the MEDIAN of them, then blend it into the
+// displayed value once per pulse. A smaller window + heavier weight on the
+// new reading keeps the display responsive (ramps up quickly, tracks the
+// real speed) instead of lagging. Impossible (>25 mph) intervals are
 // rejected before they enter the window.
-#define SPEED_WINDOW 6
+#define SPEED_WINDOW 4
 #define SPEED_MAX_MPH 25.0f
 unsigned long revIntervalBuf[SPEED_WINDOW];
 uint8_t revIntervalCount = 0;
@@ -212,9 +214,9 @@ void pushRevInterval(unsigned long intervalMs) {
   }
 
   float target = (MILES_PER_PULSE * 3600.0f * 1000.0f) / (float)medianIntervalMs();
-  // Gentle blend per pulse: the median already removed the jitter, this just
-  // keeps the display from stepping when the median shifts.
-  smoothedMph = smoothedMph * 0.6f + target * 0.4f;
+  // Weight the new (median) reading heavily so the speed responds quickly; the
+  // median has already removed most of the per-pulse jitter.
+  smoothedMph = smoothedMph * 0.35f + target * 0.65f;
 }
 
 /** Median of the buffered intervals (insertion sort — max 6 elements). */
