@@ -43,6 +43,7 @@ const TELEMETRY_STALE_MS = 120000;
 const PRESENCE_WINDOW_MS = 45000; // seen within this = on the bleachers (fallback if the leave beacon is missed)
 const LOVE_COOLDOWN_MS = 6000;
 const LOVE_GLOW_MS = 5000; // how long Mickey smiles after a love press
+const GIFT_COOLDOWN_MS = 60 * 60 * 1000; // one gifted snack per browser per hour
 const CHEERIO_MS = 60000; // Mickey munches a default cheerio for a full minute
 const ITEM_MS = 20000; // a gifted powerup takes 20s to eat, then it takes effect
 const EAT_GAP_MS = 1000; // brief empty-pawed pause between snacks
@@ -129,9 +130,26 @@ function deviceOf(src) {
   return typeof v === "string" && v.length ? v.slice(0, 64) : "";
 }
 
-function redemptionForDevice(deviceId, date) {
+// The device's current snack "slot": its most recent redemption if that slot
+// is still in play — i.e. picked-but-not-yet-gifted, or gifted within the last
+// hour (the cooldown). Older/gifted-long-ago redemptions free up a new slot.
+function activeRedemption(deviceId, now = Date.now()) {
   if (!deviceId) return null;
-  return db.prepare("SELECT * FROM redemptions WHERE device_id = ? AND date = ?").get(deviceId, date) || null;
+  const r = db.prepare("SELECT * FROM redemptions WHERE device_id = ? ORDER BY id DESC LIMIT 1").get(deviceId);
+  if (!r) return null;
+  if (!r.gifted) return r;
+  if (now - (r.gifted_at || r.redeemed_at) < GIFT_COOLDOWN_MS) return r;
+  return null;
+}
+
+// Has the device's gifted snack been eaten? (gifted, and nothing of theirs
+// left uneaten in the backpack).
+function deviceGiftEaten(deviceId, redemption) {
+  if (!deviceId || !redemption || !redemption.gifted) return false;
+  const pending = db
+    .prepare("SELECT COUNT(*) AS c FROM backpack WHERE device_id = ? AND eaten_at IS NULL")
+    .get(deviceId).c;
+  return pending === 0;
 }
 
 function touchPresence(userId, now = Date.now()) {
@@ -396,14 +414,19 @@ app.get("/api/state", (req, res) => {
 
   let you = null;
   if (user) {
-    // Daily powerup status is tracked per-device (survives profile rebuilds).
-    const redemption = redemptionForDevice(deviceOf(req.query), trail.date);
+    // Snack status is tracked per-device (survives profile rebuilds); one gift
+    // per hour. `redeemedToday`/`giftedToday` keep their names for the client.
+    const device = deviceOf(req.query);
+    const redemption = activeRedemption(device, now);
+    const gifted = redemption ? Boolean(redemption.gifted) : false;
     you = {
       id: user.id,
       name: user.name,
       avatar: { hair: user.hair, skin: user.skin, outfit: user.outfit },
       redeemedToday: redemption ? redemption.type : null,
-      giftedToday: redemption ? Boolean(redemption.gifted) : false
+      giftedToday: gifted,
+      giftEaten: gifted ? deviceGiftEaten(device, redemption) : false,
+      nextSnackAt: gifted ? (redemption.gifted_at || redemption.redeemed_at) + GIFT_COOLDOWN_MS : null
     };
   }
 
@@ -522,14 +545,13 @@ app.post("/api/powerups/redeem", (req, res) => {
   const now = Date.now();
   touchPresence(user.id, now);
   const trail = trailNow();
-  const existing = redemptionForDevice(deviceId, trail.date);
+  const existing = activeRedemption(deviceId, now);
+  if (existing && existing.gifted) {
+    const waitMin = Math.ceil((GIFT_COOLDOWN_MS - (now - (existing.gifted_at || existing.redeemed_at))) / 60000);
+    return res.status(409).json({ ok: false, error: `One snack per hour — try again in ${waitMin} min.` });
+  }
   if (existing) {
-    return res.status(409).json({
-      ok: false,
-      error: "already redeemed today",
-      redeemedToday: existing.type,
-      giftedToday: Boolean(existing.gifted)
-    });
+    return res.status(409).json({ ok: false, error: "already picked", redeemedToday: existing.type, giftedToday: false });
   }
   db.prepare("INSERT INTO redemptions (user_id, device_id, date, type, redeemed_at) VALUES (?, ?, ?, ?, ?)").run(
     user.id,
@@ -549,22 +571,25 @@ app.post("/api/backpack/gift", (req, res) => {
   const deviceId = deviceOf(body);
   const now = Date.now();
   touchPresence(user.id, now);
-  const trail = trailNow();
-  const redemption = redemptionForDevice(deviceId, trail.date);
+  const redemption = activeRedemption(deviceId, now);
   if (!redemption) return res.status(400).json({ ok: false, error: "redeem a powerup first" });
-  if (redemption.gifted) return res.status(409).json({ ok: false, error: "already gifted today" });
+  if (redemption.gifted) {
+    const waitMin = Math.ceil((GIFT_COOLDOWN_MS - (now - (redemption.gifted_at || redemption.redeemed_at))) / 60000);
+    return res.status(409).json({ ok: false, error: `One snack per hour — try again in ${waitMin} min.` });
+  }
 
   const count = db.prepare("SELECT COUNT(*) AS c FROM backpack WHERE eaten_at IS NULL").get().c;
   if (count >= BACKPACK_SLOTS) {
     return res.status(409).json({ ok: false, error: "backpack is full — wait for Mickey to snack" });
   }
 
-  db.prepare("INSERT INTO backpack (user_id, type, added_at) VALUES (?, ?, ?)").run(
+  db.prepare("INSERT INTO backpack (user_id, device_id, type, added_at) VALUES (?, ?, ?, ?)").run(
     user.id,
+    deviceId,
     redemption.type,
     now
   );
-  db.prepare("UPDATE redemptions SET gifted = 1 WHERE id = ?").run(redemption.id);
+  db.prepare("UPDATE redemptions SET gifted = 1, gifted_at = ? WHERE id = ?").run(now, redemption.id);
 
   // The boost does NOT start yet — it activates once Mickey finishes eating the
   // powerup (see advanceEating). Gifting just drops it in the backpack.

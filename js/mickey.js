@@ -291,7 +291,7 @@ function drawBackpackProp(ctx, x, baseY, scale) {
 /** Tiny pixel-person avatar for Friends & Fam. avatar = {hair, skin, outfit}. */
 const AVATAR_SKINS = ["#f5d3b3", "#eab890", "#d29b6e", "#a9714b", "#7f4f31", "#5b3a22"];
 const AVATAR_HAIR_COLORS = ["#2a2320", "#6e4a2c", "#1d1a17", "#b04338", "#3f5f9e", "#d8b96e", "#7a4a26", "#8f4a6a"];
-const AVATAR_OUTFITS = ["#5f8f4f", "#4f6fa8", "#b05343", "#7d5a9e", "#c97f3f", "#3f8f88", "#e6ded0", "#c9556f", "#d8b840"];
+const AVATAR_OUTFITS = ["#5f8f4f", "#4f6fa8", "#b05343", "#7d5a9e", "#c97f3f", "#3f8f88", "#c4c8c6", "#c9556f", "#d8b840"];
 const AVATAR_HAIR_LABELS = ["Short", "Long", "Curly", "Cap", "Beanie", "Sun Hat", "Ponytail", "Mohawk"];
 const AVATAR_OUTFIT_LABELS = ["Forest Tee", "Blue Tee", "Red Flannel", "Purple Tee", "Orange Hoodie", "Teal Tee", "Mickey Tee", "Pink Tee", "Sunny Tee"];
 // Number of choices per attribute (used for shuffling + server validation).
@@ -423,9 +423,11 @@ function drawAvatar(ctx, x, y, scale, avatar) {
     px(ctx, x + 2.4 * scale, y + 1.6 * scale, scale, 2.4 * scale, hc);
     px(ctx, x + 8.6 * scale, y + 1.4 * scale, 1.5 * scale, scale, hc);      // tie
     px(ctx, x + 9.4 * scale, y + 2 * scale, 1.2 * scale, 4 * scale, hc);    // tail
-  } else { // mohawk
-    px(ctx, x + 5.2 * scale, y - 1 * scale, 1.6 * scale, 3.4 * scale, hc);  // crest
+  } else { // mohawk — a triangular crest (wide base, pointed top)
     px(ctx, x + 3 * scale, y + 1.4 * scale, 6 * scale, scale, shade(hc, 0.85)); // shaved sides
+    px(ctx, x + 4.8 * scale, y + 0.6 * scale, 2.4 * scale, 0.9 * scale, hc);
+    px(ctx, x + 5.2 * scale, y - 0.3 * scale, 1.6 * scale, 0.9 * scale, hc);
+    px(ctx, x + 5.6 * scale, y - 1.2 * scale, 0.8 * scale, 0.9 * scale, hc);
   }
 
   // body

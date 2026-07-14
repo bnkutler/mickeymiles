@@ -49,11 +49,12 @@ CREATE TABLE IF NOT EXISTS redemptions (
 );
 
 CREATE TABLE IF NOT EXISTS backpack (
-  id       INTEGER PRIMARY KEY AUTOINCREMENT,
-  user_id  TEXT NOT NULL,
-  type     TEXT NOT NULL,
-  added_at INTEGER NOT NULL,
-  eaten_at INTEGER
+  id        INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id   TEXT NOT NULL,
+  device_id TEXT,
+  type      TEXT NOT NULL,
+  added_at  INTEGER NOT NULL,
+  eaten_at  INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS events (
@@ -70,13 +71,18 @@ CREATE TABLE IF NOT EXISTS kv (
 );
 `);
 
-// Migration: add device_id to older redemptions tables + index for the
-// per-device daily powerup limit.
-const redemptionCols = db.prepare("PRAGMA table_info(redemptions)").all();
-if (!redemptionCols.some((c) => c.name === "device_id")) {
-  db.exec("ALTER TABLE redemptions ADD COLUMN device_id TEXT");
+// Migrations for older databases: add columns the current code expects.
+function addColumnIfMissing(table, column, decl) {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all();
+  if (!cols.some((c) => c.name === column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${decl}`);
+  }
 }
-db.exec("CREATE INDEX IF NOT EXISTS idx_redemptions_device_date ON redemptions(device_id, date)");
+addColumnIfMissing("redemptions", "device_id", "TEXT");
+addColumnIfMissing("redemptions", "gifted_at", "INTEGER"); // when it was gifted (hourly cooldown)
+addColumnIfMissing("backpack", "device_id", "TEXT");       // so we can tell whose gift got eaten
+db.exec("CREATE INDEX IF NOT EXISTS idx_redemptions_device ON redemptions(device_id, id)");
+db.exec("CREATE INDEX IF NOT EXISTS idx_backpack_device ON backpack(device_id, eaten_at)");
 
 const kvGetStmt = db.prepare("SELECT value FROM kv WHERE key = ?");
 const kvSetStmt = db.prepare(

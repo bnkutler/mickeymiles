@@ -747,11 +747,16 @@ function renderPowerupCards() {
 
   const packBtn = document.getElementById("pack-button");
   const giftDone = document.getElementById("gift-done");
+  const eaten = you && you.giftEaten;
   giftDone.hidden = !gifted;
+  giftDone.textContent = eaten
+    ? "Mickey has eaten the snack you gave him!"
+    : "Packed! Mickey will eat it at his next refuel.";
   const full = S && S.backpack.length >= S.backpackSlots;
   if (gifted) {
     packBtn.disabled = true;
-    packBtn.textContent = "PACKED FOR TODAY ✓";
+    const mins = you.nextSnackAt ? Math.max(1, Math.ceil((you.nextSnackAt - Date.now()) / 60000)) : 60;
+    packBtn.textContent = `Next snack in ${mins}m`;
   } else if (full) {
     packBtn.disabled = true;
     packBtn.textContent = "Backpack full — try later";
