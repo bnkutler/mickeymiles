@@ -61,6 +61,12 @@ Server-side handling worth knowing:
 - **Deltas, not overwrites** — daily miles/wheel-time are accumulated from the
   change between reports, so a device reboot (counters back to 0) never erases
   banked miles.
+- **Plausibility guards** — a delta implying more than `MAX_PLAUSIBLE_MPH` (6)
+  since the previous report is dropped, wheel-time can't exceed the wall-clock
+  time that actually passed, real miles are capped at `MAX_DAILY_DEVICE_MILES`
+  (12) per trail day, and a device date more than a day off the trail day is
+  ignored in favour of the trail day. Rejections are recorded and surfaced by
+  `GET /api/health`. See **When the wheel logs nonsense** below for why.
 - **Second smoothing pass** — `/api/state` exposes the average of the raw
   speed samples from the last ~18 s, so the speedometer doesn't tick.
 - **Powerup multipliers** — while a boost is active, each mile delta banks
@@ -76,7 +82,7 @@ Server-side handling worth knowing:
 | `POST /api/powerups/redeem` | `{userId, type}` — one per user per trail-local day (`pumpkin_seed` 2×/30 min, `blueberry` 5×/10 min, `chili` 10×/2 min). 409 if already redeemed. |
 | `POST /api/backpack/gift` | `{userId}` — puts today's redeemed powerup in Mickey's 6-slot backpack (409 when full) **and activates the boost** (one boost at a time; the newest gift overrides). |
 | `POST /api/love` | `{userId}` — only while Mickey rests (refuel/sleep), 6 s per-user cooldown. Everyone sees the smile + toast. |
-| `GET /api/health` | Liveness. |
+| `GET /api/health` | Liveness, plus `lastTelemetryAt` / `telemetryAgeSec` and `lastAnomaly` — enough to tell a silent tracker from a misbehaving one without opening a shell. |
 
 Game rules living server-side: Mickey is `running` when the wheel moves,
 otherwise `refuel` (7:00–19:59 trail time) or `sleeping`. While refueling he
@@ -104,6 +110,62 @@ and `/api/dev/redemptions/clear`, all gated behind `DEV_ENABLED` in `server.js`.
 the server with `MICKEY_DEV=0` or delete the two clearly-marked `DEV TOOLS` /
 `DEV ROUTES` blocks in `server.js`, the `initDevTools()` function in
 `js/app.js`, and the `.dev-bar` markup/styles.
+
+## When the wheel logs nonsense
+
+### What happened (Jul 31 – Aug 6, 2026)
+
+The log picked up ~1,900 phantom miles — days of 337 mi against a real ~0.3 —
+and then went silent. The daily totals gave it away by being *too* consistent:
+
+| Day | Miles | Wheel min | Implied pulse rate |
+| --- | --- | --- | --- |
+| Jul 30 (normal) | 0.438 | 29.0 | bursty, ~0.9 mph |
+| Aug 1 | 337.283 | 1088.3 | 19.998 Hz |
+| Aug 2 | 337.286 | 1090.1 | 19.998 Hz |
+| Aug 5 | 337.346 | 1087.5 | 20.001 Hz |
+
+A hamster does not run 20.000 pulses/sec for five days to four significant
+figures. **A 120 Hz light source (mains ripple — a lamp, a charger LED, daylight
+through a fan) was reaching the slot sensor.** The ISR's 45 ms debounce
+quantises a 8.333 ms flicker to the next whole period ≥ 45 ms — exactly 6 × 8.333
+= **50.000 ms, or 20.000 Hz** — which is why every day landed on the same total.
+
+Nothing caught it because 20 Hz reads as ~15.6 mph, just under the firmware's
+25 mph reject, and the backend trusted whatever the device sent.
+
+The silence since Aug 5, 20:55 Central is separate: the ESP32 stopped posting
+and had no way to recover on its own.
+
+### Fixes
+
+- **Firmware** — `configTzTime` instead of `configTime(0, 0, …)` (the latter
+  overwrote `TZ_STRING` and left the device on UTC, rolling every day at 19:00
+  Central); NTP re-syncs instead of syncing once at boot; no posting on an
+  unsynced clock; wheel time accumulated in whole ms (a float minute counter
+  froze around 1,024); a watchdog reboot after 15 min with no successful POST;
+  rate-limited serial logging; and a two-part phantom-pulse guard that freezes
+  the counters when pulses are metronome-regular (400 intervals within 3 ms of
+  each other) or never pause for 45 minutes.
+- **Backend** — the plausibility guards described above, which hold regardless
+  of what the firmware sends.
+
+### Repairing the log
+
+`server/scripts/repair-log.js` deletes or zeroes a range of days. It is a dry
+run until you pass `--apply`, which snapshots the database first. Run it from
+the Render **Shell** (`cd /opt/render/project/src/server`), where `DATA_DIR`
+already points at the persistent disk:
+
+```bash
+node scripts/repair-log.js --list                                  # show every day
+node scripts/repair-log.js --from 2026-07-31 --to 2026-08-06       # preview
+node scripts/repair-log.js --from 2026-07-31 --to 2026-08-06 --apply
+```
+
+Deleting the range drops those days entirely; `--zero` keeps the rows at 0 if
+you'd rather the log show them. Mickey's trail position is derived from the sum
+of the log, so it moves back on its own.
 
 ## Deploying (Render)
 

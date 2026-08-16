@@ -40,6 +40,22 @@ const SPEED_WINDOW_MS = 6000;
 // If no telemetry for this long, the tracker is offline: speed 0, not moving.
 const TELEMETRY_STALE_MS = 120000;
 
+// ---- telemetry plausibility guards ----
+// A dwarf hamster on a 20 cm wheel cruises just under 1 mph and has never
+// topped 1 mph average here. Anything sustained above MAX_PLAUSIBLE_MPH is not
+// a hamster: it's the sensor counting something that isn't the wheel. (Jul 31 –
+// Aug 6 2026: a 120 Hz light source flickering into the slot sensor produced a
+// dead-steady 20 pulses/sec around the clock — ~337 mi/day, 1,900 bogus miles
+// before anyone noticed.) Reports that imply more than this are recorded as
+// anomalies and contribute nothing to the log.
+const MAX_PLAUSIBLE_MPH = 6;
+// Hard ceiling on real (non-powerup) miles banked in a single trail day.
+const MAX_DAILY_DEVICE_MILES = 12;
+// A device date this far from trail-local "today" is a clock the device never
+// managed to sync (an unsynced ESP32 reports 1970-01-01) — don't let it open a
+// row at the wrong end of the log.
+const MAX_DATE_SKEW_DAYS = 1;
+
 const PRESENCE_WINDOW_MS = 45000; // seen within this = on the bleachers (fallback if the leave beacon is missed)
 const LOVE_COOLDOWN_MS = 6000;
 const LOVE_GLOW_MS = 5000; // how long Mickey smiles after a love press
@@ -164,6 +180,29 @@ function uneatenBackpack() {
        WHERE b.eaten_at IS NULL ORDER BY b.added_at ASC, b.id ASC`
     )
     .all();
+}
+
+/** Whole days between two YYYY-MM-DD strings (sign-carrying, |a - b|). */
+function dayGap(a, b) {
+  const ms = Date.parse(`${a}T00:00:00Z`) - Date.parse(`${b}T00:00:00Z`);
+  return Number.isFinite(ms) ? Math.abs(ms) / 86400000 : Infinity;
+}
+
+/**
+ * Record a rejected/clamped telemetry report so a broken sensor is visible
+ * instead of silently poisoning the journey. Surfaced by GET /api/health.
+ */
+function noteAnomaly(reason, detail) {
+  const prev = kvGet("sensorAnomaly", null);
+  const sameRun = prev && prev.reason === reason;
+  kvSet("sensorAnomaly", {
+    reason,
+    detail,
+    at: Date.now(),
+    firstAt: sameRun ? prev.firstAt : Date.now(),
+    count: sameRun ? prev.count + 1 : 1
+  });
+  console.warn(`[telemetry] rejected (${reason}): ${detail}`);
 }
 
 function computeTracker(now = Date.now()) {
@@ -295,7 +334,28 @@ app.use((req, res, next) => {
   next();
 });
 
-app.get("/api/health", (req, res) => res.json({ ok: true }));
+// Liveness, plus enough to diagnose a silent or misbehaving tracker without
+// opening a shell: when the device was last heard from and the most recent
+// telemetry the plausibility guards threw out.
+app.get("/api/health", (req, res) => {
+  const last = kvGet("lastTelemetry");
+  const anomaly = kvGet("sensorAnomaly", null);
+  res.json({
+    ok: true,
+    trailDate: trailNow().date,
+    lastTelemetryAt: last && last.at ? new Date(last.at).toISOString() : null,
+    telemetryAgeSec: last && last.at ? Math.floor((Date.now() - last.at) / 1000) : null,
+    lastAnomaly: anomaly
+      ? {
+          reason: anomaly.reason,
+          detail: anomaly.detail,
+          count: anomaly.count,
+          firstAt: new Date(anomaly.firstAt).toISOString(),
+          lastAt: new Date(anomaly.at).toISOString()
+        }
+      : null
+  });
+});
 
 // ---- telemetry (device contract unchanged from v1) ----
 app.post("/api/telemetry", (req, res) => {
@@ -305,10 +365,18 @@ app.post("/api/telemetry", (req, res) => {
   }
 
   const now = Date.now();
-  const date =
-    typeof body.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.date)
-      ? body.date
-      : trailNow().date;
+  const trailDate = trailNow().date;
+  // Trust the device's day only when its clock is in the same neighbourhood as
+  // the trail's — otherwise the day is ours. Keeps an unsynced device (1970) or
+  // a wildly wrong clock from opening a row at the wrong end of the log.
+  let date = trailDate;
+  if (typeof body.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.date)) {
+    if (dayGap(body.date, trailDate) <= MAX_DATE_SKEW_DAYS) {
+      date = body.date;
+    } else {
+      noteAnomaly("bad-date", `device reported ${body.date}, trail day is ${trailDate}`);
+    }
+  }
 
   const rawMiles = Number(body.milesToday);
   const rawWheelMin = Number(body.wheelMinutesToday);
@@ -326,8 +394,43 @@ app.post("/api/telemetry", (req, res) => {
 
   // The device reports cumulative-for-the-day values; we fold in the delta so
   // a device reboot (counter back to ~0) never erases miles already banked.
-  const milesDelta = miles >= row.last_raw_miles ? miles - row.last_raw_miles : miles;
-  const wheelDelta = wheelMin >= row.last_raw_wheel_min ? wheelMin - row.last_raw_wheel_min : wheelMin;
+  const rawMilesDelta = miles >= row.last_raw_miles ? miles - row.last_raw_miles : miles;
+  const rawWheelDelta = wheelMin >= row.last_raw_wheel_min ? wheelMin - row.last_raw_wheel_min : wheelMin;
+
+  // Sanity-check the delta against the wall clock. A hamster can only cover so
+  // much ground in the time since we last heard from the device; a delta that
+  // implies more than MAX_PLAUSIBLE_MPH is phantom pulses, not miles. The
+  // last_raw_* watermarks still advance so a single bad burst is skipped rather
+  // than re-counted on every subsequent report.
+  const prev = kvGet("lastTelemetry");
+  const elapsedH = prev && prev.at && now > prev.at ? (now - prev.at) / 3600000 : 0;
+  let milesDelta = rawMilesDelta;
+  let wheelDelta = rawWheelDelta;
+
+  if (elapsedH > 0 && rawMilesDelta / elapsedH > MAX_PLAUSIBLE_MPH) {
+    noteAnomaly(
+      "implausible-speed",
+      `${rawMilesDelta.toFixed(4)} mi in ${(elapsedH * 3600).toFixed(0)}s = ` +
+        `${(rawMilesDelta / elapsedH).toFixed(1)} mph (max ${MAX_PLAUSIBLE_MPH}) — check the wheel sensor`
+    );
+    milesDelta = 0;
+    wheelDelta = 0;
+  }
+
+  // The wheel cannot have turned for more minutes than have actually passed.
+  const elapsedMin = elapsedH * 60;
+  if (elapsedH > 0 && wheelDelta > elapsedMin) wheelDelta = elapsedMin;
+
+  // Last line of defence: a hard ceiling on real miles banked per trail day.
+  const roomToday = Math.max(0, MAX_DAILY_DEVICE_MILES - row.device_miles);
+  if (milesDelta > roomToday) {
+    noteAnomaly(
+      "daily-cap",
+      `${date} would reach ${(row.device_miles + milesDelta).toFixed(2)} mi ` +
+        `(cap ${MAX_DAILY_DEVICE_MILES}) — check the wheel sensor`
+    );
+    milesDelta = roomToday;
+  }
 
   const boost = getActiveBoost(now);
   const bonusDelta = boost ? milesDelta * (boost.multiplier - 1) : 0;
@@ -342,7 +445,7 @@ app.post("/api/telemetry", (req, res) => {
      WHERE date = ?`
   ).run(milesDelta, bonusDelta, wheelDelta, miles, wheelMin, date);
 
-  if (Number.isFinite(speedMph) && speedMph >= 0 && speedMph <= 25) {
+  if (Number.isFinite(speedMph) && speedMph >= 0 && speedMph <= MAX_PLAUSIBLE_MPH) {
     speedSamples.push({ ts: now, mph: speedMph });
     speedSamples = speedSamples.filter((s) => now - s.ts <= SPEED_WINDOW_MS);
   }

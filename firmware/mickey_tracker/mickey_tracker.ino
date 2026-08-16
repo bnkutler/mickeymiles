@@ -39,6 +39,44 @@
 // Wi-Fi reconnect: try at most this often (ms)
 #define WIFI_RETRY_MS 10000
 
+// ----- Phantom-pulse guard -----
+// A slot sensor counts *anything* that chops its beam at the right rate. In
+// Jul/Aug 2026 a 120 Hz light source (mains ripple) reached the detector: the
+// ISR debounce quantised it to a dead-steady 20 pulses/sec, 24 hours a day, and
+// the backend banked ~337 miles/day against a real ~0.3. Nothing in the speed
+// path caught it, because 20 Hz reads as ~15 mph — under the old 25 mph reject.
+//
+// Two tells separate a machine from a hamster:
+//
+//   1. Regularity. Mains flicker arrives every 50.000 ms forever; a hamster's
+//      pulse interval wanders by tens of ms from step to step. So if
+//      STEADY_PULSE_LIMIT consecutive intervals each land within
+//      PULSE_JITTER_MS of the one before, it isn't a hamster. This is the fast
+//      trip — it catches the fault in ~20 s, roughly a tenth of a mile.
+//   2. It never stops. Backstop for a sensor that's noisy rather than periodic:
+//      motion for MAX_CONTINUOUS_RUN_MS with never a STOPPED_AFTER_MS pause.
+//      Mickey's *entire* day tops out around 45 wheel-minutes across several
+//      bouts, so an unbroken 45-minute run is already off the map.
+//
+// Either trip freezes the counters until pulses genuinely cease for
+// SENSOR_RECOVER_MS.
+#define PULSE_JITTER_MS 3UL
+#define STEADY_PULSE_LIMIT 400UL
+#define MAX_CONTINUOUS_RUN_MS (45UL * 60UL * 1000UL)
+#define SENSOR_RECOVER_MS 60000UL
+
+// Belt and braces: a hard ceiling on miles banked in one day. Mickey's best
+// real day is well under a mile.
+#define MAX_DAILY_MILES 12.0f
+
+// If no telemetry POST has succeeded in this long, something is wedged (Wi-Fi
+// stack, HTTP client, DNS). Reboot rather than sit silent — the tracker went
+// dark for 11 days in Aug 2026 with no way to recover on its own.
+#define WATCHDOG_MS (15UL * 60UL * 1000UL)
+
+// Re-sync the clock this often. Also re-synced whenever it looks unset.
+#define CLOCK_RESYNC_MS (6UL * 60UL * 60UL * 1000UL)
+
 // miles = (diameter_cm * PI) / 160934  — measured wheel: 20 cm diameter
 #define WHEEL_CIRCUMFERENCE_MILES (20.0f * 3.14159265f / 160934.0f)
 
@@ -51,10 +89,22 @@
 
 // ----- State -----
 unsigned long revolutionsToday = 0;
-float wheelMinutesToday = 0.0f;
+// Wheel time is accumulated in whole milliseconds, not float minutes: a float
+// carrying ~1000 minutes has an ulp bigger than a 3 ms loop tick, so the
+// additions silently vanish and the counter freezes short of the real value.
+unsigned long wheelMillisToday = 0;
 
 char currentDateStr[12] = "1970-01-01";
 char lastDateStr[12] = "";
+
+// ----- Health -----
+bool clockValid = false;             // NTP has actually landed (year >= 2020)
+unsigned long lastClockSyncMs = 0;
+unsigned long lastPostOkMs = 0;      // millis() of the last 2xx from the backend
+bool sensorSuspect = false;          // phantom-pulse guard has latched
+unsigned long runStartMs = 0;        // start of the current unbroken moving bout
+unsigned long steadyPulseStreak = 0; // consecutive near-identical pulse intervals
+unsigned long prevIntervalMs = 0;
 
 // ----- Interrupt-driven revolution counting -----
 // The ISR counts magnet passes in hardware, so we NEVER miss one — even while
@@ -105,24 +155,55 @@ void IRAM_ATTR onHallEdge() {
   isrRevCount++;
 }
 
+/**
+ * Sync the clock over NTP *in the trail timezone*.
+ *
+ * Use configTzTime, never configTime(0, 0, ...): configTime derives a TZ string
+ * from the offsets it is handed and calls setenv("TZ")/tzset() itself, so
+ * passing 0,0 silently overwrote the TZ_STRING set in setup() and left the
+ * device on UTC. Every daily counter then rolled at 19:00 Central instead of
+ * midnight, and the log's day boundaries drifted with it.
+ */
 void syncClock() {
-  configTime(0, 0, "pool.ntp.org", "time.nist.gov");
+  lastClockSyncMs = millis();
+  configTzTime(TZ_STRING, "pool.ntp.org", "time.nist.gov");
   for (int i = 0; i < 30; i++) {
     struct tm ti;
-    if (getLocalTime(&ti)) {
-      Serial.println("[time] NTP synced");
+    if (getLocalTime(&ti) && ti.tm_year + 1900 >= 2020) {
+      clockValid = true;
+      Serial.printf("[time] NTP synced: %04d-%02d-%02d %02d:%02d %s\n", ti.tm_year + 1900,
+                    ti.tm_mon + 1, ti.tm_mday, ti.tm_hour, ti.tm_min, TZ_STRING);
       return;
     }
     delay(500);
   }
-  Serial.println("[time] NTP sync failed — day rollover may be wrong until sync");
+  Serial.println("[time] NTP sync failed — will retry; not posting until the clock is real");
+}
+
+/**
+ * Re-sync when the clock has never landed, or every CLOCK_RESYNC_MS to correct
+ * drift. setup() only ever synced once, so a device that booted while the
+ * router was still down (power cut) stayed on 1970 forever.
+ */
+void maybeSyncClock() {
+  if (WiFi.status() != WL_CONNECTED) {
+    return;
+  }
+  unsigned long now = millis();
+  unsigned long due = clockValid ? CLOCK_RESYNC_MS : 30000UL;
+  if (lastClockSyncMs != 0 && now - lastClockSyncMs < due) {
+    return;
+  }
+  syncClock();
 }
 
 void updateDateString() {
   struct tm ti;
-  if (!getLocalTime(&ti)) {
+  if (!getLocalTime(&ti) || ti.tm_year + 1900 < 2020) {
+    clockValid = false;
     return;
   }
+  clockValid = true;
   strftime(currentDateStr, sizeof(currentDateStr), "%Y-%m-%d", &ti);
 }
 
@@ -135,8 +216,64 @@ void maybeRollDaily() {
   if (strcmp(currentDateStr, lastDateStr) != 0) {
     Serial.printf("[day] %s -> %s: reset daily counters\n", lastDateStr, currentDateStr);
     revolutionsToday = 0;
-    wheelMinutesToday = 0.0f;
+    wheelMillisToday = 0;
     strncpy(lastDateStr, currentDateStr, sizeof(lastDateStr) - 1);
+  }
+}
+
+/** Miles banked today, from the pulse count. */
+float milesToday() {
+  return revolutionsToday * MILES_PER_PULSE;
+}
+
+/**
+ * Phantom-pulse guard, tell #1: metronome regularity. A hamster's stride wanders
+ * by tens of milliseconds between pulses; a 120 Hz light source quantised by the
+ * ISR debounce lands on the same interval every single time.
+ */
+void checkPulseRegularity(unsigned long intervalMs) {
+  unsigned long drift = intervalMs > prevIntervalMs ? intervalMs - prevIntervalMs
+                                                    : prevIntervalMs - intervalMs;
+  if (prevIntervalMs != 0 && drift <= PULSE_JITTER_MS) {
+    steadyPulseStreak++;
+    if (!sensorSuspect && steadyPulseStreak >= STEADY_PULSE_LIMIT) {
+      sensorSuspect = true;
+      Serial.printf("[sensor] SUSPECT: %lu pulses at a steady %lu ms — that is not a hamster. "
+                    "Freezing counters; check for a light source hitting the slot sensor.\n",
+                    steadyPulseStreak, intervalMs);
+    }
+  } else {
+    steadyPulseStreak = 0;
+  }
+  prevIntervalMs = intervalMs;
+}
+
+/**
+ * Phantom-pulse guard, tell #2: it never stops. Latches when the wheel has
+ * "moved" for MAX_CONTINUOUS_RUN_MS without a single STOPPED_AFTER_MS pause.
+ * Either tell clears only after the pulses genuinely stop for SENSOR_RECOVER_MS.
+ */
+void updateSensorHealth(bool moving) {
+  unsigned long now = millis();
+
+  if (moving) {
+    if (runStartMs == 0) {
+      runStartMs = now;
+    } else if (!sensorSuspect && now - runStartMs > MAX_CONTINUOUS_RUN_MS) {
+      sensorSuspect = true;
+      Serial.printf("[sensor] SUSPECT: %lu min of unbroken motion — freezing counters. "
+                    "Check for a light source hitting the slot sensor.\n",
+                    (now - runStartMs) / 60000UL);
+    }
+    return;
+  }
+
+  runStartMs = 0;
+  if (sensorSuspect && lastRevMs != 0 && now - lastRevMs > SENSOR_RECOVER_MS) {
+    sensorSuspect = false;
+    steadyPulseStreak = 0;
+    prevIntervalMs = 0;
+    Serial.println("[sensor] recovered — pulses stopped, counting again");
   }
 }
 
@@ -187,14 +324,29 @@ void processRevolutions() {
   if (revs != processedRevCount) {
     unsigned long added = revs - processedRevCount;
     processedRevCount = revs;
-    revolutionsToday += added;
     lastRevMs = millis();
-    movedSinceLastTelemetry = true;
     if (intervalUs > 0) {
       lastRevIntervalMs = intervalUs / 1000UL;
-      pushRevInterval(lastRevIntervalMs);
+      checkPulseRegularity(lastRevIntervalMs);
     }
-    Serial.printf("[wheel] +%lu rev (today %lu)\n", added, revolutionsToday);
+    // Pulses always update lastRevMs and feed the guard (that is how it notices
+    // they never stop), but a suspect sensor — or a day already past the
+    // plausible ceiling — banks no miles.
+    if (!sensorSuspect && milesToday() < MAX_DAILY_MILES) {
+      revolutionsToday += added;
+      movedSinceLastTelemetry = true;
+      if (intervalUs > 0) {
+        pushRevInterval(lastRevIntervalMs);
+      }
+    }
+    // Rate-limited: at a phantom 20 pulses/sec this printf ran nonstop, and a
+    // USB CDC write with nothing draining the other end can block the loop.
+    static unsigned long lastRevLogMs = 0;
+    if (lastRevMs - lastRevLogMs >= 1000UL) {
+      lastRevLogMs = lastRevMs;
+      Serial.printf("[wheel] +%lu rev (today %lu, %.4f mi)%s\n", added, revolutionsToday,
+                    milesToday(), sensorSuspect ? " [SENSOR SUSPECT — not counted]" : "");
+    }
   }
 }
 
@@ -268,10 +420,11 @@ bool computeIsMoving(float mph) {
 }
 
 String buildJsonPayload(float mph, bool moving) {
-  float milesToday = revolutionsToday * MILES_PER_PULSE;
+  float miles = milesToday();
+  float wheelMinutes = wheelMillisToday / 60000.0f;
   float avg = 0.0f;
-  if (wheelMinutesToday > 0.05f) {
-    avg = milesToday / (wheelMinutesToday / 60.0f);
+  if (wheelMinutes > 0.05f) {
+    avg = miles / (wheelMinutes / 60.0f);
     if (avg > 25.0f) {
       avg = 0.0f;
     }
@@ -282,8 +435,8 @@ String buildJsonPayload(float mph, bool moving) {
   j += "\"date\":\"" + String(currentDateStr) + "\",";
   j += "\"isMoving\":" + String(moving ? "true" : "false") + ",";
   j += "\"speedMph\":" + String(mph, 3) + ",";
-  j += "\"milesToday\":" + String(milesToday, 5) + ",";
-  j += "\"wheelMinutesToday\":" + String(wheelMinutesToday, 3) + ",";
+  j += "\"milesToday\":" + String(miles, 5) + ",";
+  j += "\"wheelMinutesToday\":" + String(wheelMinutes, 3) + ",";
   j += "\"avgSpeedMph\":" + String(avg, 3);
   j += "}";
   return j;
@@ -293,11 +446,22 @@ void postTelemetry() {
   if (WiFi.status() != WL_CONNECTED) {
     return;
   }
+  // Never post on an unsynced clock — the backend would open a 1970-01-01 row
+  // at the wrong end of the trail log.
+  if (!clockValid) {
+    Serial.println("[api] skipped — clock not synced yet");
+    return;
+  }
 
   float mph = computeSpeedMph();
   // "Moving" if the wheel turned any time during this telemetry window, OR it's
   // still within the stopped-timeout right now. This is what kills the flicker.
   bool moving = movedSinceLastTelemetry || computeIsMoving(mph);
+  if (sensorSuspect) {
+    // Don't paint the site with a sprint the hamster isn't running.
+    moving = false;
+    mph = 0.0f;
+  }
 
   HTTPClient http;
   String url = String(API_BASE_URL) + "/api/telemetry";
@@ -308,6 +472,7 @@ void postTelemetry() {
   String body = buildJsonPayload(mph, moving);
   int code = http.POST(body);
   if (code >= 200 && code < 300) {
+    lastPostOkMs = millis();
     Serial.println("[api] telemetry OK");
   } else {
     Serial.printf("[api] telemetry HTTP %d\n", code);
@@ -337,22 +502,34 @@ void setup() {
   }
   updateDateString();
   strncpy(lastDateStr, currentDateStr, sizeof(lastDateStr) - 1);
+  lastPostOkMs = millis();  // give the watchdog a full window before it fires
 
   Serial.println("[boot] Mickey Miles tracker ready");
+}
+
+/** Reboot if we've been unable to reach the backend for a very long time. */
+void watchdog() {
+  unsigned long now = millis();
+  if (now - lastPostOkMs < WATCHDOG_MS) {
+    return;
+  }
+  Serial.printf("[watchdog] no successful POST in %lu min — restarting\n",
+                (now - lastPostOkMs) / 60000UL);
+  Serial.flush();
+  delay(100);
+  ESP.restart();
 }
 
 void loop() {
   static unsigned long lastLoopMs = 0;
   unsigned long now = millis();
-  float dtMin = 0.0f;
-  if (lastLoopMs > 0) {
-    dtMin = (now - lastLoopMs) / 60000.0f;
-  }
+  unsigned long dtMs = lastLoopMs > 0 ? now - lastLoopMs : 0;
   lastLoopMs = now;
 
   if (WiFi.status() != WL_CONNECTED) {
     connectWifi();
   }
+  maybeSyncClock();
 
   maybeRollDaily();
 
@@ -360,14 +537,17 @@ void loop() {
 
   float mph = computeSpeedMph();
   bool moving = computeIsMoving(mph);
-  if (moving && dtMin > 0) {
-    wheelMinutesToday += dtMin;
+  updateSensorHealth(moving);
+  if (moving && !sensorSuspect) {
+    wheelMillisToday += dtMs;
   }
 
   if (now - lastTelemetryMs >= TELEMETRY_INTERVAL_MS) {
     lastTelemetryMs = now;
     postTelemetry();
   }
+
+  watchdog();
 
   delay(3);
 }
