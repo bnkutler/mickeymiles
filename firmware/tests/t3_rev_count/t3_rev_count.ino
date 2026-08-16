@@ -14,11 +14,12 @@
  */
 
 #define HALL_PIN 4              // GPIO4 == pad D3
-#define SENSOR_ACTIVE_LOW true
+#define SENSOR_ACTIVE_LOW false  // matches the firmware: LM393 D0 is active HIGH
 #define DEBOUNCE_MS 45          // same as firmware; tune here if needed
 
-// Set this from your wheel to sanity-check MPH (diameter in cm):
-#define WHEEL_DIAMETER_CM 28.0f
+// Set this from your wheel to sanity-check MPH (diameter in cm).
+// Confirmed 20 cm — must match WHEEL_CIRCUMFERENCE_MILES in mickey_tracker.ino.
+#define WHEEL_DIAMETER_CM 20.0f
 #define WHEEL_MILES (WHEEL_DIAMETER_CM * 3.14159265f / 160934.0f)
 
 bool lastStableHall = false;

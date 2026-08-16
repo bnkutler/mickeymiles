@@ -65,11 +65,22 @@ const ITEM_MS = 20000; // a gifted powerup takes 20s to eat, then it takes effec
 const EAT_GAP_MS = 1000; // brief empty-pawed pause between snacks
 const BACKPACK_SLOTS = 6;
 
+// Durations are in *run* time — minutes of the wheel actually turning, not
+// wall-clock (see getBoosts). Mickey banks roughly 20 wheel-minutes a night, so
+// these are sized to be worth a real slice of a night without one snack owning
+// the whole thing. They're deliberately close in value (~0.19 bonus miles each
+// at his usual 0.95 mph); what differs is the shape — the seed is a slow burn,
+// the chili a 90-second sprint.
 const POWERUPS = {
-  pumpkin_seed: { label: "Pumpkin Seed", emoji: "🎃", multiplier: 2, durationMs: 30 * 60 * 1000 },
-  blueberry: { label: "Blueberry", emoji: "🫐", multiplier: 5, durationMs: 10 * 60 * 1000 },
-  chili: { label: "Chili Pepper", emoji: "🌶️", multiplier: 10, durationMs: 2 * 60 * 1000 }
+  pumpkin_seed: { label: "Pumpkin Seed", emoji: "🎃", multiplier: 2, durationMs: 12 * 60 * 1000 },
+  blueberry: { label: "Blueberry", emoji: "🫐", multiplier: 5, durationMs: 3 * 60 * 1000 },
+  chili: { label: "Chili Pepper", emoji: "🌶️", multiplier: 10, durationMs: 90 * 1000 }
 };
+
+// Stacked powerups compound, so two 10x chillies really are 100x — but the
+// product is clamped here so a backpack full of them can't run away with the
+// trail (six would otherwise be a million-x).
+const MAX_COMBINED_MULTIPLIER = 100;
 
 const AVATAR_OPTIONS = { hair: 8, skin: 6, outfit: 9 };
 
@@ -132,11 +143,10 @@ function rowAvgSpeed(row) {
  * Active powerups.
  *
  * Two rules, both different from v2:
- *  - They **stack**. A new gift no longer replaces the one in effect; every
- *    live powerup contributes. Bonuses add rather than compound, so a 2x and a
- *    5x give 6x (1 + 1 + 4), not 10x — six stacked chillies would otherwise be
- *    a million-x and the trail would end in an afternoon. To compound instead,
- *    make combinedMultiplier() multiply the multipliers.
+ *  - They **stack, and they compound**. A new gift no longer replaces the one in
+ *    effect; every live powerup multiplies with the rest, so a 2x and a 5x give
+ *    10x. The product is capped at MAX_COMBINED_MULTIPLIER so a full backpack
+ *    can't run away with the trail.
  *  - They burn **run time, not wall-clock time**. `remainingMs` is decremented
  *    only by wheel motion the device actually reports (see burnBoosts), so a
  *    powerup gifted while Mickey is asleep is still there, whole, when he wakes
@@ -163,9 +173,13 @@ function getBoosts() {
   return list.filter((b) => b.remainingMs > 0 && POWERUPS[b.type]);
 }
 
-/** Combined multiplier: bonuses add, so 2x + 5x = 6x. 1 when nothing is live. */
+/**
+ * Combined multiplier: powerups compound, so 2x and 5x make 10x. Clamped to
+ * MAX_COMBINED_MULTIPLIER. Returns 1 when nothing is live.
+ */
 function combinedMultiplier(boosts) {
-  return boosts.reduce((total, b) => total + (b.multiplier - 1), 1);
+  const product = boosts.reduce((total, b) => total * b.multiplier, 1);
+  return Math.min(MAX_COMBINED_MULTIPLIER, product);
 }
 
 /**
@@ -641,6 +655,7 @@ app.get("/api/state", (req, res) => {
     boost: boosts.length
       ? {
           multiplier: combinedMultiplier(boosts),
+          capped: boosts.reduce((t, b) => t * b.multiplier, 1) > MAX_COMBINED_MULTIPLIER,
           remainingMs: Math.max(...boosts.map((b) => b.remainingMs)),
           count: boosts.length,
           byName: boosts[boosts.length - 1].byName,

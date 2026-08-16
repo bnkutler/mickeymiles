@@ -88,19 +88,28 @@ Server-side handling worth knowing:
 
 Two rules that are easy to get wrong when reading the code:
 
-- **They stack.** Every live powerup contributes; a new gift never replaces the
-  one in effect. Bonuses **add** rather than compound, so a 2× and a 5× make
-  **6×** (`1 + 1 + 4`), not 10×. Six stacked chillies compounding would be a
-  million-×. To change it, make `combinedMultiplier()` multiply instead of sum.
+- **They stack, and they compound.** Every live powerup multiplies with the
+  rest, so a 2× and a 5× make **10×**. The product is clamped to
+  `MAX_COMBINED_MULTIPLIER` (100) so a backpack full of chillies can't run away
+  with the trail — three would otherwise be 1000×.
 - **Their timers burn run time, not wall-clock time.** `remainingMs` is
   decremented only by wheel motion the device actually reports, so a powerup
-  gifted while Mickey sleeps is still whole when he wakes up. A 30-minute
-  pumpkin seed means *30 minutes of running* — which, at Mickey's current ~20
-  wheel-minutes a night, is well over a day of trail. Retune `durationMs` in
-  `POWERUPS` if that's too generous.
+  gifted while Mickey sleeps is still whole when he wakes up.
 
-`GET /api/state` returns `boost` (combined multiplier, run time left on the
-longest, and how many are stacked) plus `boosts`, the full stack.
+| Powerup | Rate | Run time | Bonus at 0.95 mph |
+| --- | --- | --- | --- |
+| 🎃 Pumpkin Seed | 2× | 12 min | ~0.19 mi |
+| 🫐 Blueberry | 5× | 3 min | ~0.19 mi |
+| 🌶️ Chili Pepper | 10× | 1.5 min | ~0.21 mi |
+
+Durations are sized against Mickey's ~20 wheel-minutes a night: worth a real
+slice of a night without one snack owning the whole thing. They're deliberately
+close in value; what differs is the shape — the seed is a slow burn, the chili
+a 90-second sprint.
+
+`GET /api/state` returns `boost` (combined multiplier, whether it's `capped`,
+run time left on the longest, and how many are stacked) plus `boosts`, the full
+stack.
 
 Game rules living server-side: Mickey is `running` when the wheel moves,
 otherwise `refuel` (7:00–19:59 trail time) or `sleeping`. While refueling he
@@ -174,13 +183,13 @@ Miles are just `pulses × MILES_PER_PULSE`, and `MILES_PER_PULSE` is
 `(diameter × π ÷ 160934) ÷ FLAGS_PER_REV`. Only three things can make the
 total wrong, and only one of them is checkable from a desk.
 
-**1. The wheel constants.** `mickey_tracker.ino` assumes a **20 cm** diameter;
-`firmware/tests/t3_rev_count.ino` says **28 cm**. One is wrong, and if it's the
-firmware, every mile is 40% low. Measure the **inner running surface** — the
-band Mickey's feet actually touch — not the outer rim, and set line 43 from it.
+**1. The wheel constants.** ✅ Confirmed: the wheel is **20 cm**, so
+`WHEEL_CIRCUMFERENCE_MILES` is right. (`t3_rev_count.ino` used to say 28 cm —
+that was stale, and has been corrected to match.)
 
-**2. `FLAGS_PER_REV`.** Set to 2. If only one flag exists, or the sensor
-reliably catches one of the two, every mile is exactly **half** of reality.
+**2. `FLAGS_PER_REV`.** Set to 2, and now the leading suspect. If only one flag
+exists, or the sensor reliably catches one of the two and misses the other,
+every mile is exactly **half** of reality. The calibration below settles it.
 
 **3. Missed passes.** A trim pot on the LM393 sets the comparator threshold. Set
 too near the edge it both drops real passes (undercount) *and* oscillates on
@@ -202,7 +211,7 @@ revolutions, slowly**:
 Repeat spinning it fast. A beam-break should count identically at both speeds.
 
 Once you know the truth, `--scale` corrects the history rather than discarding
-it (`--scale 1.4` for a 28 cm wheel that was logged as 20 cm). Going forward the
+it — `--scale 2` if it turns out only one flag was ever being seen. Going forward the
 raw pulse count is stored per day in `daily_log.device_pulses` and exposed as
 `pulses` on each log row, so miles can always be re-derived from the sensor
 data rather than being a one-way calculation.
@@ -221,8 +230,9 @@ Two measurement bugs, both fixed, both found by simulating the sketch's own code
   the start of every bout. Long intervals are now rejected from the speed window.
 
 Note that both bugs affected *time*, not distance. Distance has always been a
-straight pulse count, so if the total looks low, it's one of the three causes
-above — most likely the wheel diameter.
+straight pulse count, so if the total looks low it's cause 2 or 3 above — the
+wheel diameter is confirmed correct, which leaves a missed flag or a
+misadjusted trim pot. Run the calibration.
 
 ### Repairing the log
 

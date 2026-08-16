@@ -413,8 +413,9 @@ function renderBoostChip() {
   const spent = S.tracker.isMoving ? Date.now() - stateFetchedAt : 0;
   const left = Math.max(0, S.boost.remainingMs - spent);
   const stack = S.boost.count > 1 ? ` ·${S.boost.count}UP` : "";
+  const mult = `${S.boost.multiplier}X${S.boost.capped ? " MAX" : ""}`;
   document.getElementById("boost-text").textContent =
-    `${S.boost.multiplier}X · ${fmtCountdown(left)} RUN${stack} · ${S.boost.byName.toUpperCase()}`;
+    `${mult} · ${fmtCountdown(left)} RUN${stack} · ${S.boost.byName.toUpperCase()}`;
 }
 
 function renderBackpack() {
