@@ -195,6 +195,15 @@ body {
   color: var(--readout);
   text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.5);
 }
+/* The unit rides on the same line as the number — on a phone the readout is
+   the thing you glance at, and a stacked "MPH" cost it a whole line. */
+.hud-unit {
+  font-size: 7px;
+  color: var(--muted);
+  margin-left: 4px;
+  text-shadow: none;
+  vertical-align: baseline;
+}
 .hud-sub {
   font-family: "Press Start 2P", monospace;
   font-size: 7px;

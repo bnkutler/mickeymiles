@@ -18,6 +18,9 @@
  *   --list              show every day in the log, then exit
  *   --from / --to       inclusive YYYY-MM-DD range to repair
  *   --zero              keep the rows but set all counters to 0 (default: delete)
+ *   --scale N           multiply miles by N instead of deleting — for when the
+ *                       wheel constants were wrong. If the wheel is really
+ *                       28 cm and the firmware assumed 20, that's --scale 1.4
  *   --apply             actually write (backs up the DB first)
  *   --no-backup         skip the snapshot (not recommended)
  *
@@ -41,6 +44,7 @@ function parseArgs(argv) {
     else if (a === "--no-backup") args.backup = false;
     else if (a === "--from") args.from = argv[++i];
     else if (a === "--to") args.to = argv[++i];
+    else if (a === "--scale") args.scale = Number(argv[++i]);
     else if (a === "--help" || a === "-h") args.help = true;
     else {
       console.error(`unknown argument: ${a}`);
@@ -121,16 +125,33 @@ if (!doomed.length) {
   process.exit(0);
 }
 
+const scaling = Number.isFinite(args.scale);
+if (scaling && !(args.scale > 0)) {
+  console.error("--scale must be a positive number");
+  process.exit(1);
+}
+
 const doomedDates = new Set(doomed.map((r) => r.date));
+const mode = scaling ? `scale miles by ${args.scale}` : args.zero ? "zero out" : "delete";
 console.log(`\nDatabase: ${db.name}`);
-console.log(`Range:    ${args.from} .. ${args.to}  (${args.zero ? "zero out" : "delete"})\n`);
-printRows(before, doomedDates);
-console.log(
-  `\n  removing ${doomed.length} day(s) / ${totalOf(doomed).toFixed(2)} miles` +
-    `\n  journey total  ${totalOf(before).toFixed(2)}  ->  ${totalOf(survivors).toFixed(2)} miles` +
-    `\n  days on trail  ${before.filter((r) => totalOf([r]) > 0).length}  ->  ` +
-    `${survivors.filter((r) => totalOf([r]) > 0).length}\n`
-);
+console.log(`Range:    ${args.from} .. ${args.to}  (${mode})\n`);
+printRows(before, scaling ? new Set() : doomedDates);
+
+if (scaling) {
+  const after = totalOf(survivors) + totalOf(doomed) * args.scale;
+  console.log(
+    `\n  scaling ${doomed.length} day(s): ${totalOf(doomed).toFixed(2)} -> ` +
+      `${(totalOf(doomed) * args.scale).toFixed(2)} miles` +
+      `\n  journey total  ${totalOf(before).toFixed(2)}  ->  ${after.toFixed(2)} miles\n`
+  );
+} else {
+  console.log(
+    `\n  removing ${doomed.length} day(s) / ${totalOf(doomed).toFixed(2)} miles` +
+      `\n  journey total  ${totalOf(before).toFixed(2)}  ->  ${totalOf(survivors).toFixed(2)} miles` +
+      `\n  days on trail  ${before.filter((r) => totalOf([r]) > 0).length}  ->  ` +
+      `${survivors.filter((r) => totalOf([r]) > 0).length}\n`
+  );
+}
 
 if (!args.apply) {
   console.log("Dry run — nothing was changed. Re-run with --apply to commit.\n");
@@ -157,7 +178,16 @@ if (args.backup) {
 
 function commit() {
   const run = db.transaction(() => {
-    if (args.zero) {
+    if (scaling) {
+      // Miles and the watermark scale together; wheel time and the raw pulse
+      // count are measurements of what happened and are left untouched.
+      db.prepare(
+        `UPDATE daily_log
+            SET device_miles = device_miles * ?, bonus_miles = bonus_miles * ?,
+                last_raw_miles = last_raw_miles * ?
+          WHERE date >= ? AND date <= ?`
+      ).run(args.scale, args.scale, args.scale, args.from, args.to);
+    } else if (args.zero) {
       db.prepare(
         `UPDATE daily_log
             SET device_miles = 0, bonus_miles = 0, wheel_minutes = 0,

@@ -80,9 +80,27 @@ Server-side handling worth knowing:
 | `POST /api/users` | `{name, avatar:{hair,skin,outfit}}` → `{user:{id,…}}`. The id is stored client-side (localStorage) — no passwords. |
 | `GET /api/users/:id` | Re-hydrate a stored profile. |
 | `POST /api/powerups/redeem` | `{userId, type}` — one per user per trail-local day (`pumpkin_seed` 2×/30 min, `blueberry` 5×/10 min, `chili` 10×/2 min). 409 if already redeemed. |
-| `POST /api/backpack/gift` | `{userId}` — puts today's redeemed powerup in Mickey's 6-slot backpack (409 when full) **and activates the boost** (one boost at a time; the newest gift overrides). |
+| `POST /api/backpack/gift` | `{userId}` — puts today's redeemed powerup in Mickey's 6-slot backpack (409 when full). The boost starts once Mickey has eaten it, and **stacks** with anything already running. |
 | `POST /api/love` | `{userId}` — only while Mickey rests (refuel/sleep), 6 s per-user cooldown. Everyone sees the smile + toast. |
 | `GET /api/health` | Liveness, plus `lastTelemetryAt` / `telemetryAgeSec` and `lastAnomaly` — enough to tell a silent tracker from a misbehaving one without opening a shell. |
+
+### Powerups: stacking, and run-time countdown
+
+Two rules that are easy to get wrong when reading the code:
+
+- **They stack.** Every live powerup contributes; a new gift never replaces the
+  one in effect. Bonuses **add** rather than compound, so a 2× and a 5× make
+  **6×** (`1 + 1 + 4`), not 10×. Six stacked chillies compounding would be a
+  million-×. To change it, make `combinedMultiplier()` multiply instead of sum.
+- **Their timers burn run time, not wall-clock time.** `remainingMs` is
+  decremented only by wheel motion the device actually reports, so a powerup
+  gifted while Mickey sleeps is still whole when he wakes up. A 30-minute
+  pumpkin seed means *30 minutes of running* — which, at Mickey's current ~20
+  wheel-minutes a night, is well over a day of trail. Retune `durationMs` in
+  `POWERUPS` if that's too generous.
+
+`GET /api/state` returns `boost` (combined multiplier, run time left on the
+longest, and how many are stacked) plus `boosts`, the full stack.
 
 Game rules living server-side: Mickey is `running` when the wheel moves,
 otherwise `refuel` (7:00–19:59 trail time) or `sleeping`. While refueling he
@@ -149,6 +167,62 @@ and had no way to recover on its own.
   each other) or never pause for 45 minutes.
 - **Backend** — the plausibility guards described above, which hold regardless
   of what the firmware sends.
+
+## Is the mileage right?
+
+Miles are just `pulses × MILES_PER_PULSE`, and `MILES_PER_PULSE` is
+`(diameter × π ÷ 160934) ÷ FLAGS_PER_REV`. Only three things can make the
+total wrong, and only one of them is checkable from a desk.
+
+**1. The wheel constants.** `mickey_tracker.ino` assumes a **20 cm** diameter;
+`firmware/tests/t3_rev_count.ino` says **28 cm**. One is wrong, and if it's the
+firmware, every mile is 40% low. Measure the **inner running surface** — the
+band Mickey's feet actually touch — not the outer rim, and set line 43 from it.
+
+**2. `FLAGS_PER_REV`.** Set to 2. If only one flag exists, or the sensor
+reliably catches one of the two, every mile is exactly **half** of reality.
+
+**3. Missed passes.** A trim pot on the LM393 sets the comparator threshold. Set
+too near the edge it both drops real passes (undercount) *and* oscillates on
+supply ripple — which is what produced the Jul 31 phantom run. One adjustment
+explains both symptoms.
+
+### Calibrating
+
+Flash `firmware/tests/t3_rev_count`, then turn the wheel **by hand, exactly 20
+revolutions, slowly**:
+
+| Count | Meaning |
+| --- | --- |
+| 40 | Correct — 2 flags, no misses |
+| 20 | Only one flag is being seen: all history is 2× low |
+| 37–39 | Dropping passes: adjust the trim pot |
+| 45+ | Double-counting: raise `DEBOUNCE_MS` |
+
+Repeat spinning it fast. A beam-break should count identically at both speeds.
+
+Once you know the truth, `--scale` corrects the history rather than discarding
+it (`--scale 1.4` for a 28 cm wheel that was logged as 20 cm). Going forward the
+raw pulse count is stored per day in `daily_log.device_pulses` and exposed as
+`pulses` on each log row, so miles can always be re-derived from the sensor
+data rather than being a one-way calculation.
+
+### What the firmware was getting wrong
+
+Two measurement bugs, both fixed, both found by simulating the sketch's own code:
+
+- **Wheel time was padded by 6 seconds per bout.** Time accrued while the wheel
+  "looked busy", which included the whole `STOPPED_AFTER_MS` timeout after each
+  bout ended — **+49%** on a night of ten-second bouts, which also dragged the
+  reported average speed down. Time is now the sum of gaps between consecutive
+  pulses: 99% accurate across bout lengths.
+- **The first pulse after a rest was treated as a stride.** Its interval is the
+  length of the *rest* — possibly minutes — so it read as ~0 mph and suppressed
+  the start of every bout. Long intervals are now rejected from the speed window.
+
+Note that both bugs affected *time*, not distance. Distance has always been a
+straight pulse count, so if the total looks low, it's one of the three causes
+above — most likely the wheel diameter.
 
 ### Repairing the log
 

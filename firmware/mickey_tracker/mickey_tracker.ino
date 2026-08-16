@@ -324,7 +324,19 @@ void processRevolutions() {
   if (revs != processedRevCount) {
     unsigned long added = revs - processedRevCount;
     processedRevCount = revs;
-    lastRevMs = millis();
+    unsigned long nowMs = millis();
+    // Bank wheel time as the gap between consecutive pulses, not "time since
+    // the wheel last looked busy". The old approach kept counting for the whole
+    // STOPPED_AFTER_MS timeout after a bout ended, padding every bout with 6 s
+    // — up to +49% on a night of short bouts, which also dragged the average
+    // speed down. Gaps at or beyond the timeout are rests and are not counted.
+    if (lastRevMs != 0 && !sensorSuspect && milesToday() < MAX_DAILY_MILES) {
+      unsigned long gap = nowMs - lastRevMs;
+      if (gap < STOPPED_AFTER_MS) {
+        wheelMillisToday += gap;
+      }
+    }
+    lastRevMs = nowMs;
     if (intervalUs > 0) {
       lastRevIntervalMs = intervalUs / 1000UL;
       checkPulseRegularity(lastRevIntervalMs);
@@ -353,6 +365,13 @@ void processRevolutions() {
 /** Accept a new pulse interval into the window and update the speed. */
 void pushRevInterval(unsigned long intervalMs) {
   if (intervalMs == 0) {
+    return;
+  }
+  // The first pulse after a rest carries the gap since the *previous bout* —
+  // possibly minutes. That is not a stride, and feeding it in used to read as
+  // ~0 mph, which held computeIsMoving() false for the first few pulses of
+  // every bout and quietly shaved the start off each run.
+  if (intervalMs > STOPPED_AFTER_MS) {
     return;
   }
   float inst = (MILES_PER_PULSE * 3600.0f * 1000.0f) / (float)intervalMs;
@@ -419,6 +438,18 @@ bool computeIsMoving(float mph) {
   return (now - lastRevMs) < STOPPED_AFTER_MS && mph >= 0.07f;
 }
 
+/**
+ * Is the wheel turning *right now*, for the purpose of banking wheel time?
+ *
+ * Deliberately looser than computeIsMoving: a recent pulse is enough, with no
+ * speed threshold. The speed test needs several pulses before it clears 0.07
+ * mph, so short bouts used to bank their miles but none of their minutes —
+ * which undercounted running time and flattered the average speed.
+ */
+bool wheelIsTurning() {
+  return lastRevMs != 0 && (millis() - lastRevMs) < STOPPED_AFTER_MS;
+}
+
 String buildJsonPayload(float mph, bool moving) {
   float miles = milesToday();
   float wheelMinutes = wheelMillisToday / 60000.0f;
@@ -437,6 +468,9 @@ String buildJsonPayload(float mph, bool moving) {
   j += "\"speedMph\":" + String(mph, 3) + ",";
   j += "\"milesToday\":" + String(miles, 5) + ",";
   j += "\"wheelMinutesToday\":" + String(wheelMinutes, 3) + ",";
+  // Raw pulse count, so miles stay auditable and can be re-derived if the wheel
+  // constants ever turn out to be wrong. Miles are just pulses x MILES_PER_PULSE.
+  j += "\"revsToday\":" + String(revolutionsToday) + ",";
   j += "\"avgSpeedMph\":" + String(avg, 3);
   j += "}";
   return j;
@@ -521,10 +555,7 @@ void watchdog() {
 }
 
 void loop() {
-  static unsigned long lastLoopMs = 0;
   unsigned long now = millis();
-  unsigned long dtMs = lastLoopMs > 0 ? now - lastLoopMs : 0;
-  lastLoopMs = now;
 
   if (WiFi.status() != WL_CONNECTED) {
     connectWifi();
@@ -536,11 +567,8 @@ void loop() {
   processRevolutions();
 
   float mph = computeSpeedMph();
-  bool moving = computeIsMoving(mph);
-  updateSensorHealth(moving);
-  if (moving && !sensorSuspect) {
-    wheelMillisToday += dtMs;
-  }
+  updateSensorHealth(wheelIsTurning());
+  // Wheel time is banked per pulse in processRevolutions(), not per loop tick.
 
   if (now - lastTelemetryMs >= TELEMETRY_INTERVAL_MS) {
     lastTelemetryMs = now;

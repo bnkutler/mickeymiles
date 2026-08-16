@@ -81,6 +81,10 @@ function addColumnIfMissing(table, column, decl) {
 addColumnIfMissing("redemptions", "device_id", "TEXT");
 addColumnIfMissing("redemptions", "gifted_at", "INTEGER"); // when it was gifted (hourly cooldown)
 addColumnIfMissing("backpack", "device_id", "TEXT");       // so we can tell whose gift got eaten
+// Raw sensor pulses behind the miles. Kept so a wrong wheel constant can be
+// corrected after the fact instead of silently baking into the journey.
+addColumnIfMissing("daily_log", "device_pulses", "REAL NOT NULL DEFAULT 0");
+addColumnIfMissing("daily_log", "last_raw_pulses", "REAL NOT NULL DEFAULT 0");
 db.exec("CREATE INDEX IF NOT EXISTS idx_redemptions_device ON redemptions(device_id, id)");
 db.exec("CREATE INDEX IF NOT EXISTS idx_backpack_device ON backpack(device_id, eaten_at)");
 

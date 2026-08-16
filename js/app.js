@@ -32,6 +32,7 @@ const FOOD_LABELS = {
 // ---------------------------------------------------------------- state
 
 let S = null;               // latest server state
+let stateFetchedAt = 0;     // when S landed — lets the boost chip tick between polls
 let connection = "loading"; // loading | live | offline
 let profile = null;         // rebuilt every visit — intentionally NOT persisted
 let lastEventId = null;
@@ -63,6 +64,7 @@ async function poll() {
     if (profile) qs.set("userId", profile.id);
     if (lastEventId !== null) qs.set("since", String(lastEventId));
     S = await api(`/api/state?${qs}`);
+    stateFetchedAt = Date.now();
     connection = "live";
 
     if (lastEventId === null) {
@@ -115,6 +117,7 @@ function showEventToast(ev) {
   if (ev.type === "love") toast(`Thanks for the love, ${ev.name}!`, "toast-love");
   else if (ev.type === "eat") toast(`Thanks for the ${FOOD_LABELS[ev.item] || ev.item}, ${ev.name}!`, "toast-eat");
   else if (ev.type === "gift") toast(`${ev.name} packed a ${FOOD_LABELS[ev.item] || ev.item} for Mickey!`, "toast-gift");
+  else if (ev.type === "boost_end") toast(`${ev.name}'s ${FOOD_LABELS[ev.item] || ev.item} boost has worn off.`, "toast-eat");
 }
 
 // ---------------------------------------------------------------- helpers
@@ -399,13 +402,19 @@ function renderStatus() {
 
 function renderBoostChip() {
   const chip = document.getElementById("boost-banner");
-  if (S && S.boost) {
-    chip.hidden = false;
-    document.getElementById("boost-text").textContent =
-      `${S.boost.multiplier}X · ${fmtCountdown(S.boost.endsAt - Date.now())} · ${S.boost.byName.toUpperCase()}`;
-  } else {
+  if (!S || !S.boost) {
     chip.hidden = true;
+    return;
   }
+  chip.hidden = false;
+  // remainingMs is *run* time, so it only drains while the wheel turns. Between
+  // polls we advance it locally when Mickey is running and hold it still when
+  // he isn't — which is the whole point of the rule, made visible.
+  const spent = S.tracker.isMoving ? Date.now() - stateFetchedAt : 0;
+  const left = Math.max(0, S.boost.remainingMs - spent);
+  const stack = S.boost.count > 1 ? ` ·${S.boost.count}UP` : "";
+  document.getElementById("boost-text").textContent =
+    `${S.boost.multiplier}X · ${fmtCountdown(left)} RUN${stack} · ${S.boost.byName.toUpperCase()}`;
 }
 
 function renderBackpack() {

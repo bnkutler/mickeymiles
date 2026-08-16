@@ -128,10 +128,62 @@ function rowAvgSpeed(row) {
   return avg > 25 ? 0 : avg;
 }
 
-function getActiveBoost(now = Date.now()) {
-  const boost = kvGet("boost");
-  if (!boost || boost.endsAt <= now) return null;
-  return boost;
+/**
+ * Active powerups.
+ *
+ * Two rules, both different from v2:
+ *  - They **stack**. A new gift no longer replaces the one in effect; every
+ *    live powerup contributes. Bonuses add rather than compound, so a 2x and a
+ *    5x give 6x (1 + 1 + 4), not 10x — six stacked chillies would otherwise be
+ *    a million-x and the trail would end in an afternoon. To compound instead,
+ *    make combinedMultiplier() multiply the multipliers.
+ *  - They burn **run time, not wall-clock time**. `remainingMs` is decremented
+ *    only by wheel motion the device actually reports (see burnBoosts), so a
+ *    powerup gifted while Mickey is asleep is still there, whole, when he wakes
+ *    up and starts running.
+ */
+function getBoosts() {
+  let list = kvGet("boosts", null);
+  if (!Array.isArray(list)) {
+    // Migrate the single wall-clock boost this replaced.
+    const legacy = kvGet("boost");
+    list = [];
+    if (legacy && legacy.endsAt > Date.now()) {
+      list.push({
+        type: legacy.type,
+        multiplier: legacy.multiplier,
+        remainingMs: Math.max(0, legacy.endsAt - Date.now()),
+        byName: legacy.byName,
+        startedAt: Date.now()
+      });
+    }
+    kvDel("boost");
+    kvSet("boosts", list);
+  }
+  return list.filter((b) => b.remainingMs > 0 && POWERUPS[b.type]);
+}
+
+/** Combined multiplier: bonuses add, so 2x + 5x = 6x. 1 when nothing is live. */
+function combinedMultiplier(boosts) {
+  return boosts.reduce((total, b) => total + (b.multiplier - 1), 1);
+}
+
+/**
+ * Spend run time against every active powerup. Called from telemetry with the
+ * wheel minutes the device actually reported, so the clock only moves when the
+ * wheel does — not while Mickey refuels, sleeps, or the tracker is offline.
+ */
+function burnBoosts(wheelMinutes) {
+  if (!(wheelMinutes > 0)) return;
+  const spent = wheelMinutes * 60000;
+  const list = getBoosts().map((b) => ({ ...b, remainingMs: b.remainingMs - spent }));
+  const live = list.filter((b) => b.remainingMs > 0);
+  if (live.length !== list.length) {
+    for (const done of list.filter((b) => b.remainingMs <= 0)) {
+      addEvent("boost_end", done.byName || "a friend", done.type);
+    }
+  }
+  kvSet("boosts", live);
 }
 
 function getUser(id) {
@@ -250,11 +302,13 @@ function resolveHamsterState(tracker, trail) {
 }
 // =========================== END DEV TOOLS ==========================
 
-/** Activate a powerup's boost. One boost at a time; newest overrides. */
+/** Add a powerup to the stack. Everything already running keeps running. */
 function applyBoost(type, byName, now = Date.now()) {
   const p = POWERUPS[type];
   if (!p) return;
-  kvSet("boost", { type, multiplier: p.multiplier, endsAt: now + p.durationMs, byName });
+  const list = getBoosts();
+  list.push({ type, multiplier: p.multiplier, remainingMs: p.durationMs, byName, startedAt: now });
+  kvSet("boosts", list);
 }
 
 /**
@@ -380,11 +434,14 @@ app.post("/api/telemetry", (req, res) => {
 
   const rawMiles = Number(body.milesToday);
   const rawWheelMin = Number(body.wheelMinutesToday);
+  const rawPulses = Number(body.revsToday);
   const speedMph = Number(body.speedMph);
   const isMoving = Boolean(body.isMoving);
 
   const miles = Number.isFinite(rawMiles) ? Math.max(0, rawMiles) : 0;
   const wheelMin = Number.isFinite(rawWheelMin) ? Math.max(0, rawWheelMin) : 0;
+  // Older firmware doesn't send this; 0 just means "not recorded".
+  const pulses = Number.isFinite(rawPulses) ? Math.max(0, rawPulses) : 0;
 
   let row = db.prepare("SELECT * FROM daily_log WHERE date = ?").get(date);
   if (!row) {
@@ -396,6 +453,7 @@ app.post("/api/telemetry", (req, res) => {
   // a device reboot (counter back to ~0) never erases miles already banked.
   const rawMilesDelta = miles >= row.last_raw_miles ? miles - row.last_raw_miles : miles;
   const rawWheelDelta = wheelMin >= row.last_raw_wheel_min ? wheelMin - row.last_raw_wheel_min : wheelMin;
+  const rawPulseDelta = pulses >= row.last_raw_pulses ? pulses - row.last_raw_pulses : pulses;
 
   // Sanity-check the delta against the wall clock. A hamster can only cover so
   // much ground in the time since we last heard from the device; a delta that
@@ -406,6 +464,7 @@ app.post("/api/telemetry", (req, res) => {
   const elapsedH = prev && prev.at && now > prev.at ? (now - prev.at) / 3600000 : 0;
   let milesDelta = rawMilesDelta;
   let wheelDelta = rawWheelDelta;
+  let pulseDelta = rawPulseDelta;
 
   if (elapsedH > 0 && rawMilesDelta / elapsedH > MAX_PLAUSIBLE_MPH) {
     noteAnomaly(
@@ -415,6 +474,7 @@ app.post("/api/telemetry", (req, res) => {
     );
     milesDelta = 0;
     wheelDelta = 0;
+    pulseDelta = 0;
   }
 
   // The wheel cannot have turned for more minutes than have actually passed.
@@ -429,21 +489,28 @@ app.post("/api/telemetry", (req, res) => {
       `${date} would reach ${(row.device_miles + milesDelta).toFixed(2)} mi ` +
         `(cap ${MAX_DAILY_DEVICE_MILES}) — check the wheel sensor`
     );
+    // Keep pulses proportional to the miles actually banked, so the recorded
+    // pulse count stays a faithful basis for recalibration.
+    pulseDelta = milesDelta > 0 ? pulseDelta * (roomToday / milesDelta) : 0;
     milesDelta = roomToday;
   }
 
-  const boost = getActiveBoost(now);
-  const bonusDelta = boost ? milesDelta * (boost.multiplier - 1) : 0;
+  // Bonus miles use the combined multiplier of everything currently stacked.
+  const bonusDelta = milesDelta * (combinedMultiplier(getBoosts()) - 1);
+  // Powerups are paid for in wheel time, so spend the motion we just accepted.
+  burnBoosts(wheelDelta);
 
   db.prepare(
     `UPDATE daily_log SET
        device_miles = device_miles + ?,
        bonus_miles = bonus_miles + ?,
        wheel_minutes = wheel_minutes + ?,
+       device_pulses = device_pulses + ?,
        last_raw_miles = ?,
-       last_raw_wheel_min = ?
+       last_raw_wheel_min = ?,
+       last_raw_pulses = ?
      WHERE date = ?`
-  ).run(milesDelta, bonusDelta, wheelDelta, miles, wheelMin, date);
+  ).run(milesDelta, bonusDelta, wheelDelta, pulseDelta, miles, wheelMin, pulses, date);
 
   if (Number.isFinite(speedMph) && speedMph >= 0 && speedMph <= MAX_PLAUSIBLE_MPH) {
     speedSamples.push({ ts: now, mph: speedMph });
@@ -481,7 +548,7 @@ app.get("/api/state", (req, res) => {
     }
   }
   const eating = advanceEating(hamsterState, now);
-  const boost = getActiveBoost(now);
+  const boosts = getBoosts();
   const lovedUntil = kvGet("lovedUntil", 0);
 
   const rows = db.prepare("SELECT * FROM daily_log ORDER BY date ASC").all();
@@ -491,6 +558,7 @@ app.get("/api/state", (req, res) => {
     baseMiles: Math.round(r.device_miles * 1000) / 1000,
     bonusMiles: Math.round(r.bonus_miles * 1000) / 1000,
     wheelMinutes: Math.round(r.wheel_minutes * 10) / 10,
+    pulses: Math.round(r.device_pulses || 0),
     avgSpeedMph: Math.round(rowAvgSpeed(r) * 100) / 100
   }));
 
@@ -566,16 +634,29 @@ app.get("/api/state", (req, res) => {
       milesLeft: Math.round(Math.max(0, ROUTE_TOTAL_MILES - totalMiles) * 100) / 100,
       daysRun: dailyLog.filter((r) => r.miles > 0).length
     },
-    boost: boost
+    // `boost` is the headline for the HUD chip: the combined multiplier and the
+    // run time left on whichever powerup lasts longest. `boosts` is the whole
+    // stack, newest last. Both count down only while the wheel is turning, so
+    // `remainingMs` is run time remaining, not a wall-clock deadline.
+    boost: boosts.length
       ? {
-          type: boost.type,
-          label: POWERUPS[boost.type] ? POWERUPS[boost.type].label : boost.type,
-          emoji: POWERUPS[boost.type] ? POWERUPS[boost.type].emoji : "⚡",
-          multiplier: boost.multiplier,
-          endsAt: boost.endsAt,
-          byName: boost.byName
+          multiplier: combinedMultiplier(boosts),
+          remainingMs: Math.max(...boosts.map((b) => b.remainingMs)),
+          count: boosts.length,
+          byName: boosts[boosts.length - 1].byName,
+          type: boosts[boosts.length - 1].type,
+          label: POWERUPS[boosts[boosts.length - 1].type].label,
+          emoji: POWERUPS[boosts[boosts.length - 1].type].emoji
         }
       : null,
+    boosts: boosts.map((b) => ({
+      type: b.type,
+      label: POWERUPS[b.type].label,
+      emoji: POWERUPS[b.type].emoji,
+      multiplier: b.multiplier,
+      remainingMs: b.remainingMs,
+      byName: b.byName
+    })),
     backpack: uneatenBackpack().map((b) => ({ id: b.id, type: b.type, byName: b.by_name || "a friend" })),
     backpackSlots: BACKPACK_SLOTS,
     bleachers,
@@ -778,6 +859,7 @@ if (DEV_ENABLED) {
     db.prepare("DELETE FROM redemptions").run();
     kvDel("devOverride");
     kvDel("boost");
+    kvDel("boosts");
     kvDel("eating");
     kvDel("eatGapUntil");
     res.json({ ok: true });
